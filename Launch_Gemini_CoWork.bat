@@ -22,8 +22,9 @@ if %ERRORLEVEL% neq 0 (
 if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
     tasklist /FI "IMAGENAME eq ollama.exe" 2>NUL | find /I /N "ollama.exe">NUL
     if %ERRORLEVEL% neq 0 (
-        echo Starting local Ollama engine in background...
-        start "Ollama Engine" /min "%LocalAppData%\Programs\Ollama\ollama.exe" serve
+        echo Starting local Ollama engine with GPU acceleration in background...
+        set OLLAMA_IGPU_ENABLE=1
+        start "Ollama Engine" /min cmd /c "set OLLAMA_IGPU_ENABLE=1 && \"%LocalAppData%\Programs\Ollama\ollama.exe\" serve"
     )
 )
 

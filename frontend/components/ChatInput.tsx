@@ -16,7 +16,8 @@ import {
   ChevronDown, 
   Check 
 } from 'lucide-react';
-import { Attachment, ModelType, OutputMode } from '../types';
+import { Attachment, ModelType, OutputMode, AIProvider, AppSettings } from '../types';
+import { getProviderModelList } from '../services/geminiService';
 
 interface ChatInputProps {
   onSendMessage: (text: string, attachments: Attachment[]) => void;
@@ -28,6 +29,8 @@ interface ChatInputProps {
   outputMode: OutputMode;
   setOutputMode: (mode: OutputMode) => void;
   onOpenVoice: () => void;
+  currentProvider?: AIProvider;
+  settings?: AppSettings;
 }
 
 const OUTPUT_MODE_OPTIONS: {
@@ -102,8 +105,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   setEnableGrounding,
   outputMode,
   setOutputMode,
-  onOpenVoice
+  onOpenVoice,
+  currentProvider,
+  settings
 }) => {
+  const availableModels = getProviderModelList(currentProvider || 'gemini', settings);
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
@@ -206,7 +212,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const selectMode = (opt: typeof OUTPUT_MODE_OPTIONS[0]) => {
     setOutputMode(opt.id);
-    setModel(opt.model);
+    if (!currentProvider || currentProvider === 'gemini') {
+      setModel(opt.model);
+    }
     if (opt.needsGrounding) {
       setEnableGrounding(true);
     }
@@ -387,8 +395,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
                 className="flex items-center space-x-1.5 px-2 py-1 bg-[#282828] hover:bg-[#303030] border border-[#3c3c3c] rounded-[4px] text-xs text-[#d0d0d0] hover:text-white transition"
               >
-                <span className="font-medium text-[11px] truncate max-w-[110px]">
-                  {MODEL_OPTIONS.find(m => m.id === model)?.label || model}
+                <span className="font-medium text-[11px] truncate max-w-[120px]">
+                  {availableModels.find(m => m.id === model)?.label || model}
                 </span>
                 <ChevronDown className="w-3 h-3 text-[#888888]" />
               </button>
@@ -396,10 +404,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               {isModelMenuOpen && (
                 <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#232323] border border-[#3c3c3c] rounded-[6px] shadow-2xl p-1.5 z-50">
                   <div className="px-2 py-1 text-[10px] font-semibold text-[#808080] uppercase tracking-wider">
-                    Select Gemini Model
+                    Select Model ({(currentProvider || 'gemini').toUpperCase()})
                   </div>
                   <div className="space-y-1">
-                    {MODEL_OPTIONS.map((opt) => {
+                    {availableModels.map((opt) => {
                       const isSelected = model === opt.id;
                       return (
                         <button

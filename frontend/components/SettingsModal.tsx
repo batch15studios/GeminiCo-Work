@@ -1465,27 +1465,73 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Provider Selection Grid */}
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {/* Groq Cloud Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'groq' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      settings.aiProvider === 'groq'
+                        ? 'bg-[#2b1f3d]/70 border-[#7b42bc] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">⚡</span>
+                        <span className="text-xs font-semibold text-white">Groq Cloud</span>
+                      </div>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#321a4f] text-[#e0b0ff] border border-[#6b28b5]">
+                        500+ tok/s
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      Ultra-fast free cloud LPU. Llama 3.3 70B & Qwen 2.5 Coder. 100% free with key.
+                    </p>
+                  </div>
+
+                  {/* OpenRouter Free Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'openrouter' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      settings.aiProvider === 'openrouter'
+                        ? 'bg-[#1a2936]/70 border-[#235882] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">🔀</span>
+                        <span className="text-xs font-semibold text-white">OpenRouter</span>
+                      </div>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#132c42] text-[#60cdff] border border-[#204a6b]">
+                        Free Tier
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      Free cloud models (Llama 3.3 70B, DeepSeek R1, Gemini 2.0 Flash).
+                    </p>
+                  </div>
+
                   {/* Ollama Local Card */}
                   <div
                     onClick={() => onUpdateSettings({ ...settings, aiProvider: 'ollama' })}
                     className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
-                      (settings.aiProvider === 'ollama' || (!settings.aiProvider && !settings.apiKey))
+                      (settings.aiProvider === 'ollama' || (!settings.aiProvider && !settings.apiKey && !settings.groqApiKey))
                         ? 'bg-[#1b3d2b]/60 border-[#276e4c] text-white shadow-sm'
                         : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">🦙</span>
-                        <span className="text-xs font-semibold text-white">Local AI (Ollama)</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">🦙</span>
+                        <span className="text-xs font-semibold text-white">Local Ollama</span>
                       </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#163827] text-[#58d68d] border border-[#276e4c]">
-                        100% Free
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#163827] text-[#58d68d] border border-[#276e4c]">
+                        Offline PC
                       </span>
                     </div>
                     <p className="text-[10px] text-[#888888] leading-tight">
-                      Runs completely on your PC with GPU/CPU acceleration. Zero API credits or keys needed.
+                      Runs on local PC. Zero internet or keys needed.
                     </p>
                   </div>
 
@@ -1499,16 +1545,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">💻</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">💻</span>
                         <span className="text-xs font-semibold text-white">LM Studio</span>
                       </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#142838] text-[#60cdff] border border-[#204a6b]">
-                        Local GGUF
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#142838] text-[#60cdff] border border-[#204a6b]">
+                        Port 1234
                       </span>
                     </div>
                     <p className="text-[10px] text-[#888888] leading-tight">
-                      Connects to LM Studio on port 1234. Load any Hugging Face model locally with 1 click.
+                      Connects to LM Studio on port 1234. Load any GGUF model locally.
                     </p>
                   </div>
 
@@ -1522,16 +1568,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">🌐</span>
-                        <span className="text-xs font-semibold text-white">OpenCode / Custom</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">🌐</span>
+                        <span className="text-xs font-semibold text-white">OpenCode</span>
                       </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#2b1b42] text-[#bb86fc] border border-[#482875]">
-                        OpenAI API
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#2b1b42] text-[#bb86fc] border border-[#482875]">
+                        Custom API
                       </span>
                     </div>
                     <p className="text-[10px] text-[#888888] leading-tight">
-                      OpenCode models (Nemotron, Muse), OpenRouter free tiers, or any OpenAI-compatible URL.
+                      Any custom OpenAI-compatible API gateway or local endpoint.
                     </p>
                   </div>
 
@@ -1545,24 +1591,191 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">🌟</span>
-                        <span className="text-xs font-semibold text-white">Google Gemini</span>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">🌟</span>
+                        <span className="text-xs font-semibold text-white">Gemini</span>
                       </div>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#332512] text-[#ffb86c] border border-[#63441a]">
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#332512] text-[#ffb86c] border border-[#63441a]">
                         Cloud Pro
                       </span>
                     </div>
                     <p className="text-[10px] text-[#888888] leading-tight">
-                      Official Gemini 3.8/3.7 models and Live Voice via Google AI Studio API key.
+                      Gemini 3.8/3.7 models via Google AI Studio API key.
+                    </p>
+                  </div>
+
+                  {/* xAI Grok Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'grok' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      settings.aiProvider === 'grok'
+                        ? 'bg-[#182333]/80 border-[#3b82f6] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">🚀</span>
+                        <span className="text-xs font-semibold text-white">xAI Grok</span>
+                      </div>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1e3a5f] text-[#60a5fa] border border-[#2563eb]">
+                        Grok 2
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      Official xAI Grok 2 & Grok Vision. Frontier reasoning, coding & analysis.
                     </p>
                   </div>
                 </div>
 
                 {/* PROVIDER DETAIL SECTIONS */}
-                
-                {/* 1. OLLAMA SETTINGS */}
-                {(settings.aiProvider === 'ollama' || (!settings.aiProvider && !settings.apiKey)) && (
+
+                {/* 0. xAI GROK SETTINGS */}
+                {settings.aiProvider === 'grok' && (
+                  <div className="p-3 bg-[#131d2a] border border-[#2563eb]/60 rounded-[6px] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">🚀</span>
+                        <span className="text-xs font-semibold text-white">xAI Grok 2 API Engine</span>
+                      </div>
+                      <a
+                        href="https://console.x.ai"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-[#60a5fa] hover:underline flex items-center space-x-1"
+                      >
+                        <span>xAI Console ↗</span>
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-[#a0a0a0] leading-relaxed">
+                      Powered by xAI Grok 2. Full support for Co-work conversations, Canvas interactive generation, Code Architect, and Vision.
+                    </p>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] text-[#cccccc] font-medium">xAI Grok API Key</label>
+                        <span className="text-[10px] text-[#888888]">Saved securely</span>
+                      </div>
+                      <input
+                        type="password"
+                        value={settings.grokApiKey || ''}
+                        onChange={(e) => onUpdateSettings({ ...settings, grokApiKey: e.target.value })}
+                        placeholder="xai-..."
+                        className="w-full bg-[#0d1520] border border-[#1e3a5f] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#60a5fa]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#cccccc] mb-1 font-medium">Model Selection</label>
+                      <select
+                        value={settings.grokModel || 'grok-2-latest'}
+                        onChange={(e) => onUpdateSettings({ ...settings, grokModel: e.target.value })}
+                        className="w-full bg-[#0d1520] border border-[#1e3a5f] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      >
+                        <option value="grok-2-latest">grok-2-latest (Flagship Grok 2 - Best for Code, Canvas & Reasoning)</option>
+                        <option value="grok-2">grok-2 (Frontier Model)</option>
+                        <option value="grok-2-mini">grok-2-mini (Fast & Lightweight)</option>
+                        <option value="grok-vision-beta">grok-vision-beta (Multimodal Vision)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* 1. GROQ CLOUD SETTINGS */}
+                {settings.aiProvider === 'groq' && (
+                  <div className="p-3 bg-[#1e1a29] border border-[#5d3f8c] rounded-[6px] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">⚡</span>
+                        <span className="text-xs font-semibold text-white">Groq Cloud LPU Engine (500+ tok/sec)</span>
+                      </div>
+                      <a
+                        href="https://console.groq.com/keys"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-[#bb86fc] hover:underline flex items-center space-x-1"
+                      >
+                        <span>Get Free Key (10s) ↗</span>
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-[#a0a0a0] leading-relaxed">
+                      Groq delivers blazing fast 500+ tokens/second inference completely free with zero credit card required. Perfect for Canvas, Code Architect, and Live Voice!
+                    </p>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] text-[#cccccc] font-medium">Groq API Key</label>
+                        <span className="text-[10px] text-[#888888]">Stored locally on your device</span>
+                      </div>
+                      <input
+                        type="password"
+                        value={settings.groqApiKey || ''}
+                        onChange={(e) => onUpdateSettings({ ...settings, groqApiKey: e.target.value })}
+                        placeholder="gsk_..."
+                        className="w-full bg-[#15121e] border border-[#482875] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#bb86fc]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#cccccc] mb-1 font-medium">Model Selection</label>
+                      <select
+                        value={settings.groqModel || 'llama-3.3-70b-versatile'}
+                        onChange={(e) => onUpdateSettings({ ...settings, groqModel: e.target.value })}
+                        className="w-full bg-[#15121e] border border-[#482875] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      >
+                        <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (70B Flagship - Recommended for Code & Canvas)</option>
+                        <option value="qwen-2.5-coder-32b">qwen-2.5-coder-32b (32B Coding Specialist)</option>
+                        <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (8B Ultra Fast - 800+ tok/sec)</option>
+                        <option value="deepseek-r1-distill-llama-70b">deepseek-r1-distill-llama-70b (DeepSeek R1 Reasoning)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. OPENROUTER SETTINGS */}
+                {settings.aiProvider === 'openrouter' && (
+                  <div className="p-3 bg-[#17222b] border border-[#235882] rounded-[6px] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-base">🔀</span>
+                        <span className="text-xs font-semibold text-white">OpenRouter Free Tier Models</span>
+                      </div>
+                      <a
+                        href="https://openrouter.ai/keys"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-[#60cdff] hover:underline flex items-center space-x-1"
+                      >
+                        <span>Get API Key ↗</span>
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-[#a0a0a0] leading-relaxed">
+                      Connect to OpenRouter to access free tier cloud models including Llama 3.3 70B, DeepSeek R1, and Gemini 2.0 Flash.
+                    </p>
+                    <div>
+                      <label className="block text-[11px] text-[#cccccc] mb-1 font-medium">OpenRouter API Key</label>
+                      <input
+                        type="password"
+                        value={settings.openrouterApiKey || ''}
+                        onChange={(e) => onUpdateSettings({ ...settings, openrouterApiKey: e.target.value })}
+                        placeholder="sk-or-..."
+                        className="w-full bg-[#101921] border border-[#1f4a6e] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#60cdff]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#cccccc] mb-1 font-medium">Model Selection</label>
+                      <select
+                        value={settings.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free'}
+                        onChange={(e) => onUpdateSettings({ ...settings, openrouterModel: e.target.value })}
+                        className="w-full bg-[#101921] border border-[#1f4a6e] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                      >
+                        <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free (Llama 3.3 70B Free)</option>
+                        <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free (DeepSeek R1 Free)</option>
+                        <option value="google/gemini-2.0-flash-exp:free">google/gemini-2.0-flash-exp:free (Gemini 2.0 Free)</option>
+                        <option value="qwen/qwen-2.5-coder-32b-instruct:free">qwen/qwen-2.5-coder-32b-instruct:free (Qwen Coder Free)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. OLLAMA SETTINGS */}
+                {(settings.aiProvider === 'ollama' || (!settings.aiProvider && !settings.apiKey && !settings.groqApiKey)) && (
                   <div className="p-3 bg-[#1c241f] border border-[#276e4c]/50 rounded-[6px] space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">

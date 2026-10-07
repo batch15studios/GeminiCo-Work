@@ -1,4 +1,4 @@
-export type AIProvider = 'gemini' | 'ollama' | 'lmstudio' | 'opencode' | 'custom';
+export type AIProvider = 'gemini' | 'grok' | 'groq' | 'openrouter' | 'ollama' | 'lmstudio' | 'opencode' | 'custom';
 
 export type ModelType = 
   | 'gemini-3.8-flash'
@@ -228,6 +228,12 @@ export interface AppSettings {
   useLocalFileSystem?: boolean;
   // Multi-Provider & Local Model Settings
   aiProvider?: AIProvider;
+  grokApiKey?: string;
+  grokModel?: string;
+  groqApiKey?: string;
+  groqModel?: string;
+  openrouterApiKey?: string;
+  openrouterModel?: string;
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   customBaseUrl?: string;

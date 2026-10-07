@@ -3,7 +3,11 @@ node_modules/
 dist/
 frontend/dist/
 .env
-.env.local
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
 .DS_Store
 *.log
 npm-debug.log*

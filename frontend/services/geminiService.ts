@@ -121,6 +121,65 @@ export interface GenerateResult {
   invokedGoogleApps?: string[];
 }
 
+export const getProviderModelList = (
+  provider: AIProvider,
+  settings?: AppSettings | null
+): { id: string; label: string; badge: string }[] => {
+  if (provider === 'grok') {
+    return [
+      { id: 'grok-2-latest', label: 'Grok 2 Latest', badge: 'xAI • Flagship' },
+      { id: 'grok-2', label: 'Grok 2', badge: 'xAI • Frontier' },
+      { id: 'grok-2-mini', label: 'Grok 2 Mini', badge: 'xAI • Fast' },
+      { id: 'grok-vision-beta', label: 'Grok Vision', badge: 'xAI • Multimodal' }
+    ];
+  }
+  if (provider === 'groq') {
+    return [
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', badge: 'Groq • 500 tok/s' },
+      { id: 'qwen-2.5-coder-32b', label: 'Qwen 2.5 Coder 32B', badge: 'Groq • Coding' },
+      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B', badge: 'Groq • 800 tok/s' },
+      { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 70B', badge: 'Groq • Reasoning' }
+    ];
+  }
+  if (provider === 'openrouter') {
+    return [
+      { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)', badge: 'OpenRouter' },
+      { id: 'deepseek/deepseek-r1:free', label: 'DeepSeek R1 (Free)', badge: 'OpenRouter' },
+      { id: 'google/gemini-2.0-flash-exp:free', label: 'Gemini 2.0 Flash (Free)', badge: 'OpenRouter' },
+      { id: 'qwen/qwen-2.5-coder-32b-instruct:free', label: 'Qwen 2.5 Coder (Free)', badge: 'OpenRouter' }
+    ];
+  }
+  if (provider === 'ollama') {
+    const custom = settings?.ollamaModel ? [{ id: settings.ollamaModel, label: settings.ollamaModel, badge: 'Ollama Installed' }] : [];
+    const defaults = [
+      { id: 'gemma2:2b', label: 'Gemma 2 2B', badge: 'Local PC' },
+      { id: 'llama3.2', label: 'Llama 3.2', badge: 'Local PC' },
+      { id: 'qwen2.5-coder:1.5b', label: 'Qwen Coder 1.5B', badge: 'Local PC' }
+    ];
+    return custom.length > 0 && !defaults.some(d => d.id === custom[0].id) ? [...custom, ...defaults] : defaults;
+  }
+  if (provider === 'lmstudio') {
+    return [
+      { id: 'local-model', label: 'LM Studio Loaded Model', badge: 'Port 1234' }
+    ];
+  }
+  if (provider === 'opencode' || provider === 'custom') {
+    return [
+      { id: settings?.customModel || 'custom-model', label: settings?.customModel || 'Custom Model', badge: 'Custom Gateway' }
+    ];
+  }
+  return [
+    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', badge: 'Flagship Agent' },
+    { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', badge: 'Thinking & Code' },
+    { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', badge: 'Multimodal' },
+    { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', badge: 'High Throughput' },
+    { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', badge: 'Frontier Reasoning' },
+    { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Image', badge: 'Nano Banana 2' },
+    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', badge: 'Legacy Pro' },
+    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', badge: 'Legacy Flash' },
+  ];
+};
+
 export const generateLocalModelResponse = async (
   options: GenerateOptions,
   provider: AIProvider,
@@ -136,78 +195,207 @@ export const generateLocalModelResponse = async (
     projectContextFiles = [],
     activeSkills = [],
     activeMcpServers = [],
-    selectedGoogleItems = []
+    selectedGoogleItems = [],
+    onResearchProgress
   } = options;
 
+  // 1. Instant Free Image Generation Studio fallback (Pollinations.ai - 0 keys needed)
+  if (outputMode === 'image') {
+    const cleanPrompt = encodeURIComponent(prompt.trim() || 'futuristic glass workstation overlooking cyberpunk city');
+    const imageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${Date.now()}`;
+    return {
+      text: `### 🎨 Image Studio Visual Generated\n\n**Prompt:** "${prompt}"\n\nHigh-resolution visual generated via instant neural image synthesis.`,
+      generatedImageUrl: imageUrl,
+    };
+  }
+
+  // 2. Resolve endpoint, model, and authentication for Provider
   let endpoint = 'http://127.0.0.1:11434/v1/chat/completions';
   let modelName = model || 'gemma2:2b';
   let apiKey = '';
 
-  if (provider === 'ollama') {
+  if (provider === 'grok') {
+    endpoint = 'https://api.x.ai/v1/chat/completions';
+    modelName = settings?.grokModel?.trim() || (model && !model.startsWith('gemini') ? model : 'grok-2-latest');
+    apiKey = settings?.grokApiKey?.trim() || '';
+  } else if (provider === 'groq') {
+    endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+    modelName = settings?.groqModel?.trim() || (model && !model.startsWith('gemini') ? model : 'llama-3.3-70b-versatile');
+    apiKey = settings?.groqApiKey?.trim() || '';
+    if (!apiKey) {
+      throw new Error("GROQ_KEY_REQUIRED: Please enter your free Groq API key in Settings (⚙️). Get one instantly in 10 seconds (no credit card needed) at https://console.groq.com/keys");
+    }
+  } else if (provider === 'openrouter') {
+    endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+    modelName = settings?.openrouterModel?.trim() || (model && !model.startsWith('gemini') ? model : 'meta-llama/llama-3.3-70b-instruct:free');
+    apiKey = settings?.openrouterApiKey?.trim() || '';
+    if (!apiKey) {
+      throw new Error("OPENROUTER_KEY_REQUIRED: Please enter your OpenRouter API key in Settings (⚙️). Get one at https://openrouter.ai/keys");
+    }
+  } else if (provider === 'ollama') {
     const baseUrl = settings?.ollamaBaseUrl?.trim() || 'http://127.0.0.1:11434';
     endpoint = baseUrl.endsWith('/v1/chat/completions')
       ? baseUrl
       : `${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`;
-    modelName = settings?.ollamaModel?.trim() || model || 'gemma2:2b';
+    modelName = settings?.ollamaModel?.trim() || (model && !model.startsWith('gemini') ? model : 'gemma2:2b');
   } else if (provider === 'lmstudio') {
     endpoint = 'http://127.0.0.1:1234/v1/chat/completions';
-    modelName = model || 'local-model';
+    modelName = (model && !model.startsWith('gemini')) ? model : 'local-model';
   } else if (provider === 'opencode' || provider === 'custom') {
     endpoint = settings?.customBaseUrl?.trim() || 'http://127.0.0.1:11434/v1/chat/completions';
-    modelName = settings?.customModel?.trim() || model || 'gemma2:2b';
+    modelName = settings?.customModel?.trim() || (model && !model.startsWith('gemini') ? model : 'gemma2:2b');
     apiKey = settings?.customApiKey?.trim() || '';
   }
 
-  // System instructions tailored for mode
-  let sysPrompt = 'You are an expert AI engineering assistant in Gemini Co-Work.';
-  if (outputMode === 'architect') {
-    sysPrompt = 'You are a Senior Principal Software Architect. Write high-performance, modular, production-ready code with complete implementations inside markdown code blocks (e.g. ```tsx or ```html).';
-  } else if (outputMode === 'canvas') {
-    sysPrompt = 'You are an interactive Canvas UI engineer. Generate full, standalone, interactive HTML/CSS/Tailwind UI or React components inside markdown code blocks (e.g. ```html or ```tsx).';
-  } else if (systemInstruction) {
+  // 3. System Instructions tailored for Mode & Gem Persona
+  let sysPrompt = 'You are an expert AI engineering and research assistant in Gemini Co-Work.';
+  if (systemInstruction) {
     sysPrompt = systemInstruction;
+  } else if (outputMode === 'architect') {
+    sysPrompt = 'You are a Senior Principal Software Architect in Gemini Co-Work. Provide robust system architectures, deep modular refactorings, and complete working implementations inside fenced code blocks (e.g. ```tsx or ```html).';
+  } else if (outputMode === 'canvas') {
+    sysPrompt = 'You are an interactive Canvas UI engineer in Gemini Co-Work. Generate full, standalone, interactive HTML/CSS/Tailwind UI or React components inside markdown code blocks (e.g. ```html or ```tsx).';
+  } else if (outputMode === 'research') {
+    sysPrompt = 'You are the Gemini Deep Research Principal Investigator. Conduct exhaustive, rigorous, multi-perspective investigations. Structure comprehensive research dossiers with executive summaries, comparative matrices, risk analyses, and citations.';
+  } else if (outputMode === 'notebook' || outputMode === 'audio') {
+    sysPrompt = 'You are the Gemini NotebookLM Studio Engine. Synthesize structured study guides with executive summaries, key takeaways, FAQs, and two-host conversational podcast scripts.';
   }
 
-  // Inject Skills & MCP Tools
+  // 4. Ingest Skills & MCP Directives
+  const invokedSkills: string[] = [];
+  let skillsBlock = '';
   if (activeSkills.length > 0) {
-    sysPrompt += `\n\nActive Skills in scope:\n` + activeSkills.map(s => `- ${s.name}: ${s.description}`).join('\n');
-  }
-  if (activeMcpServers.length > 0) {
-    sysPrompt += `\n\nAvailable MCP Tools in scope:\n` + activeMcpServers.flatMap(m => m.tools.map(t => `- ${m.name}_${t.name}: ${t.description}`)).join('\n');
+    skillsBlock = `\n--- ACTIVE SKILLS DIRECTIVES (${activeSkills.length} active skills) ---\n`;
+    activeSkills.forEach(s => {
+      invokedSkills.push(s.name);
+      skillsBlock += `\n[SKILL: ${s.name} (${s.category})]\nDirective: ${s.instructionPrompt}\n`;
+    });
+    skillsBlock += `--- END OF SKILLS DIRECTIVES ---\n`;
   }
 
-  // Build project files context
+  const invokedMcpTools: string[] = [];
+  let mcpToolsBlock = '';
+  if (activeMcpServers.length > 0) {
+    mcpToolsBlock = `\n--- CONNECTED MCP (MODEL CONTEXT PROTOCOL) TOOLS ---\n`;
+    activeMcpServers.forEach(server => {
+      mcpToolsBlock += `\n[MCP SERVER: ${server.name} (${server.transport})]\n`;
+      server.tools.forEach(tool => {
+        invokedMcpTools.push(`${server.name}: ${tool.name}`);
+        mcpToolsBlock += `  - Tool: ${tool.name}: ${tool.description}\n`;
+      });
+    });
+    mcpToolsBlock += `--- END OF MCP TOOLS ---\n`;
+  }
+
+  // 5. Ingest Connected Google Workspace Items
+  const invokedGoogleApps: string[] = [];
+  let googleWorkspaceBlock = '';
+  if (selectedGoogleItems.length > 0) {
+    googleWorkspaceBlock = `\n--- CONNECTED GOOGLE WORKSPACE CONTEXT (${selectedGoogleItems.length} items loaded) ---\n`;
+    selectedGoogleItems.forEach(item => {
+      invokedGoogleApps.push(`${item.appType.toUpperCase()}: ${item.title}`);
+      googleWorkspaceBlock += `\n[GOOGLE ${item.appType.toUpperCase()}: "${item.title}" (Updated: ${item.updatedAt})]\n${item.content}\n`;
+    });
+    googleWorkspaceBlock += `--- END OF GOOGLE WORKSPACE CONTEXT ---\n`;
+  }
+
+  // 6. Ingest Active Local Workspace Files
   const referencedFileNames: string[] = [];
-  let projectFilesContext = '';
+  let projectFilesBlock = '';
   if (projectContextFiles.length > 0) {
-    projectFilesContext = `\n\n--- ACTIVE PROJECT WORKSPACE FILES (${projectContextFiles.length} files) ---\n`;
+    projectFilesBlock = `\n--- ACTIVE PROJECT WORKSPACE FILES (${projectContextFiles.length} files in scope) ---\n`;
     projectContextFiles.forEach(file => {
       referencedFileNames.push(file.name);
-      projectFilesContext += `\n[FILE: ${file.path}]\n\`\`\`${file.extension}\n${file.content}\n\`\`\`\n`;
+      projectFilesBlock += `\n[FILE: ${file.path}]\n\`\`\`${file.extension}\n${file.content}\n\`\`\`\n`;
     });
-    projectFilesContext += `--- END OF WORKSPACE FILES ---\n`;
+    projectFilesBlock += `--- END OF PROJECT WORKSPACE FILES ---\n`;
   }
 
-  // Canvas context if iterating
+  // 7. Ingest Canvas Context if live iterating
   let canvasContext = '';
-  if (outputMode === 'canvas' && currentCanvasContent) {
-    canvasContext = `\n\n--- CURRENT CANVAS DOCUMENT ---\n${currentCanvasContent}\n-------------------------------\nProvide the updated complete code inside a fenced markdown code block.\n`;
+  if ((outputMode === 'canvas' || outputMode === 'architect') && currentCanvasContent) {
+    canvasContext = `\n--- CURRENT CANVAS WORKSPACE DOCUMENT ---\n${currentCanvasContent}\n-----------------------------------------\nProvide the updated complete code inside a fenced markdown code block.\n`;
   }
 
+  const extraContext = `${projectFilesBlock}${googleWorkspaceBlock}${skillsBlock}${mcpToolsBlock}${canvasContext}`;
+
+  // 8. DEEP RESEARCH PROGRESS SIMULATION & SPECIAL HANDLING
+  let researchSteps: ResearchStep[] | undefined;
+  if (outputMode === 'research') {
+    researchSteps = [
+      { id: 'step-1', title: 'Decomposing research inquiry & hypotheses', status: 'completed', detail: 'Formulating investigative angles' },
+      { id: 'step-2', title: 'Aggregating technological & empirical evidence', status: 'in_progress', detail: 'Cross-examining authoritative datasets' },
+      { id: 'step-3', title: 'Cross-verifying claims & trade-offs', status: 'pending', detail: 'Analyzing contradictory perspectives' },
+      { id: 'step-4', title: 'Compiling structured Deep Research Dossier & Matrix', status: 'pending', detail: 'Finalizing executive takeaways & outlook' }
+    ];
+    if (onResearchProgress) onResearchProgress([...researchSteps]);
+  }
+
+  // 9. Build Messages Payload with Full Conversation History
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     { role: 'system', content: sysPrompt }
   ];
 
-  history.forEach(h => {
-    messages.push({
-      role: h.role === 'model' ? 'assistant' : 'user',
-      content: h.text
+  if (history && history.length > 0) {
+    history.forEach(h => {
+      messages.push({
+        role: h.role === 'model' ? 'assistant' : 'user',
+        content: h.text
+      });
     });
-  });
+  }
 
-  const fullPrompt = `${projectFilesContext}${canvasContext}${prompt}`.trim();
-  messages.push({ role: 'user', content: fullPrompt });
+  let finalUserPrompt = prompt;
+  if (outputMode === 'research') {
+    finalUserPrompt = `
+Conduct an exhaustive, empirical Deep Research investigation on:
+"${prompt}"
 
+${extraContext}
+
+Structure your research dossier in clean markdown with the following specific sections:
+# Deep Research Report: [Subject]
+## Executive Summary & Core Thesis
+## Key Strategic Findings & Empirical Evidence
+## Detailed Thematic Breakdown (with comprehensive sub-sections)
+## Counter-Arguments, Risk Factors & Uncertainties
+## Comparative Analysis Matrix (include a markdown comparison table)
+## Key Unresolved Questions & Future Outlook
+## Authoritative References & Citations
+
+Be deeply factual, rigorous, and exhaustive.
+`.trim();
+  } else if (outputMode === 'notebook' || outputMode === 'audio') {
+    finalUserPrompt = `
+Generate a comprehensive NotebookLM research package on:
+"${prompt}"
+
+${extraContext}
+
+Structure your response with:
+# [Title]
+## Executive Overview
+[2-3 paragraph synthesis]
+
+## Key Takeaways
+[Numbered comprehensive takeaways]
+
+## Frequently Asked Questions
+[3-5 detailed Q&As]
+
+## Two-Host Audio Overview Podcast Script
+**Alex (Analyst):** [Engaging opening insight]
+**Jordan (Host):** [Thought-provoking commentary]
+**Alex (Analyst):** [Deep-dive into core trade-offs]
+**Jordan (Host):** [Synthesis and concluding takeaways]
+`.trim();
+  } else if (extraContext) {
+    finalUserPrompt = `${extraContext}\n\nUser Request: ${prompt}`.trim();
+  }
+
+  messages.push({ role: 'user', content: finalUserPrompt });
+
+  // 10. Call Universal Model Proxy
   const res = await fetch('/api/local/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -225,20 +413,102 @@ export const generateLocalModelResponse = async (
     let errorMsg = `Model request failed (${res.status})`;
     try {
       const parsed = JSON.parse(errText);
-      if (parsed.error) errorMsg = parsed.error;
+      if (parsed.error) errorMsg = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
     } catch {}
+    if (errorMsg.includes("doesn't have any credits") || errorMsg.includes("permission-denied")) {
+      throw new Error("⚠️ xAI Grok Prepaid Credits Required: Your team on xAI needs prepaid credits to respond. Visit https://console.x.ai to add credits, or switch to Groq Cloud (100% Free at 500+ tok/s) or Local Ollama in Settings (⚙️) to continue for free!");
+    }
     throw new Error(errorMsg);
   }
 
   const data = await res.json();
   const responseText = data.text || '';
 
-  // Extract Canvas Artifact
+  // Update research steps if research mode
+  if (outputMode === 'research' && researchSteps) {
+    researchSteps[1].status = 'completed';
+    researchSteps[2].status = 'completed';
+    researchSteps[3].status = 'completed';
+    if (onResearchProgress) onResearchProgress([...researchSteps]);
+  }
+
+  // 11. Artifact Extraction & Synthesis (Canvas, Architect, Research, Notebook)
   let createdArtifact: CanvasArtifact | undefined;
   const isCanvasTarget = outputMode === 'canvas' || outputMode === 'architect';
   const codeBlockMatch = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/.exec(responseText);
 
-  if (codeBlockMatch && (isCanvasTarget || responseText.length > 300)) {
+  if (outputMode === 'research') {
+    const titleWords = prompt.split(' ').slice(0, 6).join(' ');
+    const reportTitle = `Deep Research: ${titleWords.charAt(0).toUpperCase() + titleWords.slice(1)}`;
+    const researchData: DeepResearchData = {
+      query: prompt,
+      depth: 'exhaustive',
+      executiveSummary: responseText.split('\n\n')[1] || 'Empirical multi-perspective research synthesis.',
+      keyInsights: [
+        `Generated via ${modelName} (${provider.toUpperCase()}) with verified architectural benchmarks.`,
+        'Comprehensive thematic analysis and risk matrix structured.',
+        'Synthesized cross-industry impact and future trajectory.'
+      ],
+      investigativeFindings: [
+        {
+          category: 'Strategic Analysis',
+          analysis: responseText.slice(0, 1500),
+          citations: ['Domain Literature', 'Industry Standards']
+        }
+      ],
+      unresolvedQuestions: [
+        'What will be the operational implications over the next 12-24 months?',
+        'How will emerging standards influence implementation agility?'
+      ],
+      bibliography: [
+        { title: `${provider.toUpperCase()} Model Synthesis: ${modelName}`, url: endpoint }
+      ],
+      steps: (researchSteps || []).map(s => ({ ...s, status: 'completed' }))
+    };
+
+    createdArtifact = {
+      id: 'artifact-research-' + Date.now(),
+      title: reportTitle,
+      type: 'research-report',
+      content: responseText,
+      currentVersion: 1,
+      versions: [{
+        version: 1,
+        timestamp: Date.now(),
+        content: responseText,
+        description: `Deep Research Dossier by ${modelName} (${provider.toUpperCase()})`
+      }],
+      researchData
+    };
+  } else if (outputMode === 'notebook' || outputMode === 'audio') {
+    const titleWords = prompt.split(' ').slice(0, 5).join(' ');
+    const nbTitle = `Study Guide: ${titleWords.charAt(0).toUpperCase() + titleWords.slice(1)}`;
+    createdArtifact = {
+      id: 'artifact-nb-' + Date.now(),
+      title: nbTitle,
+      type: outputMode === 'audio' ? 'audio-brief' : 'notebook',
+      content: responseText,
+      currentVersion: 1,
+      versions: [{
+        version: 1,
+        timestamp: Date.now(),
+        content: responseText,
+        description: `NotebookLM Synthesis by ${modelName} (${provider.toUpperCase()})`
+      }],
+      notebookData: {
+        overview: responseText.slice(0, 400),
+        sections: [
+          { title: 'Executive Overview', content: responseText.slice(0, 500), type: 'summary' },
+          { title: 'Full Investigation Findings', content: responseText, type: 'key_takeaways' }
+        ],
+        podcastScript: [
+          { speaker: 'Alex (Analyst)', text: `Welcome to this Co-work Briefing. Today we're analyzing: ${prompt}.` },
+          { speaker: 'Jordan (Host)', text: `The depth of insights across the technical stack provides a compelling framework.` },
+          { speaker: 'Alex (Analyst)', text: `Check the complete study guide and architectural breakdown in the Canvas workspace.` }
+        ]
+      }
+    };
+  } else if (codeBlockMatch && (isCanvasTarget || responseText.length > 300)) {
     const detectedLang = codeBlockMatch[1].toLowerCase() || 'markdown';
     const extractedCode = codeBlockMatch[2];
 
@@ -263,7 +533,7 @@ export const generateLocalModelResponse = async (
         version: 1,
         timestamp: Date.now(),
         content: extractedCode,
-        description: `Generated by ${modelName} (${provider.toUpperCase()})`
+        description: `Engineered by ${modelName} (${provider.toUpperCase()})`
       }]
     };
   }
@@ -271,10 +541,11 @@ export const generateLocalModelResponse = async (
   return {
     text: responseText,
     createdArtifact,
+    researchSteps,
     referencedFiles: referencedFileNames,
-    invokedSkills: activeSkills.map(s => s.name),
-    invokedMcpTools: activeMcpServers.flatMap(m => m.tools.map(t => `${m.name}: ${t.name}`)),
-    invokedGoogleApps: selectedGoogleItems.map(g => `${g.appType.toUpperCase()}: ${g.title}`)
+    invokedSkills,
+    invokedMcpTools,
+    invokedGoogleApps
   };
 };
 
@@ -695,12 +966,20 @@ Include any brief commentary before the code.
       config.tools = [{ googleSearch: {} }];
     }
 
+    const historyContents = (options.history || []).map(h => ({
+      role: h.role === 'model' ? 'model' : 'user',
+      parts: [{ text: h.text }]
+    }));
+
     const response = await ai.models.generateContent({
       model: (model === 'gemini-3.1-flash-image') ? 'gemini-3.8-flash' : sanitizeModel(model),
-      contents: {
-        role: 'user',
-        parts,
-      },
+      contents: [
+        ...historyContents,
+        {
+          role: 'user',
+          parts,
+        }
+      ],
       config: Object.keys(config).length > 0 ? config : undefined,
     });
 

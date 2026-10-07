@@ -607,7 +607,7 @@ app.post('/api/local/start', async (req, res) => {
   }
 });
 
-// POST /api/local/chat - Universal OpenAI-compatible chat completion proxy
+// POST /api/local/chat - Universal OpenAI-compatible chat completion proxy (supports Groq, OpenRouter, Ollama, LM Studio)
 app.post('/api/local/chat', async (req, res) => {
   try {
     const { 
@@ -615,7 +615,9 @@ app.post('/api/local/chat', async (req, res) => {
       model = 'gemma2:2b', 
       messages = [], 
       temperature = 0.7, 
-      apiKey = '' 
+      apiKey = '',
+      tools = undefined,
+      stream = false
     } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
@@ -625,21 +627,64 @@ app.post('/api/local/chat', async (req, res) => {
     const headers = {
       'Content-Type': 'application/json'
     };
-    if (apiKey && apiKey.trim()) {
-      headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+    let activeKey = apiKey ? apiKey.trim() : '';
+    if (!activeKey) {
+      if (endpoint.includes('x.ai')) activeKey = (process.env.GROK_API_KEY || '').trim();
+      else if (endpoint.includes('groq.com')) activeKey = (process.env.GROQ_API_KEY || '').trim();
+      else if (endpoint.includes('openrouter.ai')) activeKey = (process.env.OPENROUTER_API_KEY || '').trim();
+    }
+    if (activeKey) {
+      headers['Authorization'] = `Bearer ${activeKey}`;
     }
 
     const payload = {
       model,
       messages,
       temperature,
-      stream: false
+      stream: !!stream
     };
+
+    if (tools && Array.isArray(tools) && tools.length > 0) {
+      payload.tools = tools;
+    }
 
     const targetUrl = endpoint.endsWith('/chat/completions') 
       ? endpoint 
       : `${endpoint.replace(/\/+$/, '')}/chat/completions`;
 
+    // Handle Streaming Responses (SSE)
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        res.write(`data: ${JSON.stringify({ error: errText })}\n\n`);
+        return res.end();
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value, { stream: true }));
+        }
+      } catch (streamErr) {
+        console.error('[Stream Error]', streamErr);
+      }
+      return res.end();
+    }
+
+    // Standard Non-Streaming Request
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers,
@@ -654,16 +699,20 @@ app.post('/api/local/chat', async (req, res) => {
     }
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content || '';
+    const message = data?.choices?.[0]?.message || {};
+    const content = message.content || '';
+    const toolCalls = message.tool_calls || undefined;
+
     return res.json({
       text: content,
+      toolCalls,
       model: data?.model || model,
       usage: data?.usage,
       raw: data
     });
   } catch (err) {
     console.error('Local model chat error:', err);
-    res.status(500).json({ error: err.message || 'Failed to communicate with local model provider' });
+    res.status(500).json({ error: err.message || 'Failed to communicate with model provider' });
   }
 });
 

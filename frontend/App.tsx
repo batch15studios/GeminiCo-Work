@@ -53,7 +53,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   voiceGender: 'male',
   soundEffects: true,
   autoCloudSync: true,
-  aiProvider: 'ollama',
+  aiProvider: 'grok',
+  grokApiKey: '',
+  grokModel: 'grok-2-latest',
+  groqModel: 'llama-3.3-70b-versatile',
   ollamaBaseUrl: 'http://127.0.0.1:11434',
   ollamaModel: 'gemma2:2b',
   customBaseUrl: 'http://127.0.0.1:11434/v1',
@@ -66,7 +69,12 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_SETTINGS_KEY);
-      return stored ? JSON.parse(stored) : DEFAULT_SETTINGS;
+      const parsed = stored ? JSON.parse(stored) : {};
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        grokApiKey: parsed.grokApiKey || DEFAULT_SETTINGS.grokApiKey,
+      };
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -499,6 +507,7 @@ export default function App() {
         model: activeSession.model,
         outputMode: currentMode,
         prompt: text || 'Work with project context and tools',
+        history: activeSession.messages.map(m => ({ role: m.role, text: m.content })),
         systemInstruction: activeGem.systemPrompt,
         enableGrounding: activeSession.enableGrounding || currentMode === 'research',
         attachments,
@@ -547,11 +556,20 @@ export default function App() {
       );
     } catch (err: any) {
       let displayError = err.message || 'Unable to generate response. Please try again.';
-      if (displayError.includes('GEMINI_KEY_REQUIRED') || displayError.includes('API Key is required') || displayError.includes('Authentication Required')) {
-        displayError = '🔑 **Gemini API Key Required**\n\nTo begin chatting with Gemini 3 models, please enter your Gemini API key in Settings (⚙️) or click the key banner above.\n\n👉 [Get a free Gemini API Key from Google AI Studio](https://aistudio.google.com/apikey)\n\n*(Click the Settings button at the bottom left to paste your key)*';
+      if (displayError.includes('RESOURCE_EXHAUSTED') || displayError.includes('429') || displayError.toLowerCase().includes('quota')) {
+        displayError = '⚠️ **Google Gemini API Quota Exhausted (429)**\n\nYour Gemini API prepaid quota has run out.\n\n⚡ **Switch to Groq Cloud (500+ tok/sec — 100% Free)** or **Local AI (Ollama)** in Settings (⚙️) to continue with zero limits!\n\n1. Open **Settings (⚙️) > Preferences**\n2. Select **Groq Cloud**\n3. Paste your free key from [console.groq.com/keys](https://console.groq.com/keys) (Takes 10 seconds, no credit card)';
+        openSettingsOnTab('preferences');
+      } else if (displayError.includes('GROQ_KEY_REQUIRED')) {
+        displayError = '⚡ **Groq API Key Required (100% Free)**\n\nTo use Groq ultra-fast LPU inference (500+ tokens/sec):\n\n1. Get your free key instantly at [console.groq.com/keys](https://console.groq.com/keys) (No credit card needed)\n2. Paste it in **Settings (⚙️) > Preferences > Groq Cloud**\n\n*(Opening Settings for you now)*';
+        openSettingsOnTab('preferences');
+      } else if (displayError.includes('OPENROUTER_KEY_REQUIRED')) {
+        displayError = '🔀 **OpenRouter API Key Required**\n\nPlease enter your OpenRouter API key in **Settings (⚙️) > Preferences** to access free cloud models.\n\n👉 [Get an OpenRouter API Key](https://openrouter.ai/keys)';
+        openSettingsOnTab('preferences');
+      } else if (displayError.includes('GEMINI_KEY_REQUIRED') || displayError.includes('API Key is required') || displayError.includes('Authentication Required')) {
+        displayError = '🔑 **Gemini API Key Required**\n\nTo begin chatting with Gemini 3 models, please enter your Gemini API key in Settings (⚙️) or switch to Groq / Local AI.\n\n👉 [Get a free Gemini API Key from Google AI Studio](https://aistudio.google.com/apikey)\n\n*(Click the Settings button at the bottom left to paste your key)*';
         openSettingsOnTab('general');
       } else if (displayError.includes('Bad Gateway') || displayError.includes('502')) {
-        displayError = '⚠️ **API Gateway Error (502)**\n\nPlease verify your Gemini API key in Settings (⚙️ > General). Note: Live Voice is accessible via the dedicated **Live Voice** button in the chat toolbar or title bar!';
+        displayError = '⚠️ **API Gateway Error (502)**\n\nPlease verify your model credentials in Settings (⚙️). Note: Live Voice is accessible via the dedicated **Live Voice** button in the chat toolbar or title bar!';
       }
       const errorMessage: Message = {
         id: 'msg-err-' + Date.now(),
@@ -804,7 +822,13 @@ export default function App() {
               <div className="flex items-center space-x-2">
                 <span className="w-2 h-2 rounded-full bg-[#58d68d] animate-pulse" />
                 <span>
-                  <strong>Running 100% Free:</strong> Using {settings.aiProvider === 'ollama' ? 'Local Ollama' : settings.aiProvider === 'lmstudio' ? 'LM Studio' : 'OpenCode / Custom'} ({settings.ollamaModel || settings.customModel || 'gemma2:2b'}). Zero API credits needed.
+                  <strong>Active Engine:</strong> {
+                    settings.aiProvider === 'grok' ? `xAI Grok (${settings.grokModel || 'grok-2-latest'})` :
+                    settings.aiProvider === 'groq' ? `Groq Cloud LPU (${settings.groqModel || 'llama-3.3-70b-versatile'} • 500+ tok/s Free)` :
+                    settings.aiProvider === 'openrouter' ? `OpenRouter (${settings.openrouterModel || 'Llama 3.3 70B'})` :
+                    settings.aiProvider === 'ollama' ? `Local Ollama (${settings.ollamaModel || 'gemma2:2b'})` :
+                    settings.aiProvider === 'lmstudio' ? 'LM Studio (Local)' : 'Custom API'
+                  }
                 </span>
               </div>
               <button
@@ -812,7 +836,7 @@ export default function App() {
                 onClick={() => openSettingsOnTab('preferences')}
                 className="text-[11px] text-[#a3e9b9] hover:underline"
               >
-                Change Model / Provider ⚙️
+                Change Provider ⚙️
               </button>
             </div>
           )}
@@ -828,6 +852,8 @@ export default function App() {
             outputMode={activeSession.defaultOutputMode || 'canvas'}
             setOutputMode={(mode) => handleUpdateActiveSession({ defaultOutputMode: mode })}
             onOpenVoice={() => setVoiceModalOpen(true)}
+            currentProvider={settings.aiProvider || (settings.apiKey ? 'gemini' : 'grok')}
+            settings={settings}
           />
         </main>
 

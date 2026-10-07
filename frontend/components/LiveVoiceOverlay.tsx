@@ -17,8 +17,14 @@ export const LiveVoiceOverlay: React.FC<LiveVoiceOverlayProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [continuousMode, setContinuousMode] = useState(true);
   const [transcript, setTranscript] = useState('');
-  const [statusText, setStatusText] = useState('Tap sphere to start Gemini Live bidirectional voice');
+  const [statusText, setStatusText] = useState('Tap sphere to start Live Voice session');
   const [recognition, setRecognition] = useState<any>(null);
+  const transcriptRef = useRef('');
+  const continuousModeRef = useRef(continuousMode);
+
+  useEffect(() => {
+    continuousModeRef.current = continuousMode;
+  }, [continuousMode]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -45,21 +51,23 @@ export const LiveVoiceOverlay: React.FC<LiveVoiceOverlayProps> = ({
 
       rec.onresult = (e: any) => {
         const current = e.results[0][0].transcript;
+        transcriptRef.current = current;
         setTranscript(current);
       };
 
       rec.onend = async () => {
         setIsListening(false);
-        if (transcript.trim()) {
-          setStatusText('Gemini is thinking...');
+        const spokenText = transcriptRef.current.trim();
+        if (spokenText) {
+          setStatusText('Thinking...');
           try {
             const result = await generateGeminiResponse({
               model: 'gemini-3.8-flash',
-              prompt: transcript,
+              prompt: spokenText,
               systemInstruction: 'Respond conversationally, warmly, and concisely for spoken voice. Keep responses under 2-3 sentences.',
             });
 
-            setStatusText('Gemini speaking...');
+            setStatusText('Speaking...');
             setIsSpeaking(true);
             if ('speechSynthesis' in window) {
               window.speechSynthesis.cancel();
@@ -67,13 +75,14 @@ export const LiveVoiceOverlay: React.FC<LiveVoiceOverlayProps> = ({
               utter.rate = 1.05;
               utter.pitch = 1.0;
               const voices = window.speechSynthesis.getVoices();
-              const voice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('David'));
+              const voice = voices.find(v => v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('David') || v.name.includes('Jenny'));
               if (voice) utter.voice = voice;
 
               utter.onend = () => {
                 setIsSpeaking(false);
-                if (continuousMode) {
+                if (continuousModeRef.current) {
                   setStatusText('Listening...');
+                  transcriptRef.current = '';
                   setTranscript('');
                   try {
                     rec.start();
@@ -91,10 +100,10 @@ export const LiveVoiceOverlay: React.FC<LiveVoiceOverlayProps> = ({
               window.speechSynthesis.speak(utter);
             }
 
-            onTranscriptReceived(transcript, result.text);
+            onTranscriptReceived(spokenText, result.text);
           } catch (err: any) {
             setIsSpeaking(false);
-            setStatusText('Error responding. Tap mic to retry.');
+            setStatusText(err.message || 'Error responding. Tap mic to retry.');
           }
         } else {
           setStatusText('No speech detected. Tap mic to speak.');
@@ -105,7 +114,7 @@ export const LiveVoiceOverlay: React.FC<LiveVoiceOverlayProps> = ({
     } else {
       setStatusText('Speech recognition not supported in this browser.');
     }
-  }, [isOpen, transcript, continuousMode]);
+  }, [isOpen]);
 
   const toggleMic = () => {
     // If speaking, interrupt immediately!
