@@ -1715,14 +1715,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div>
                       <label className="block text-[11px] text-[#cccccc] mb-1 font-medium">Model Selection</label>
                       <select
-                        value={settings.groqModel || 'llama-3.3-70b-versatile'}
+                        value={settings.groqModel || 'openai/gpt-oss-20b'}
                         onChange={(e) => onUpdateSettings({ ...settings, groqModel: e.target.value })}
                         className="w-full bg-[#15121e] border border-[#482875] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
                       >
-                        <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (70B Flagship - Recommended for Code & Canvas)</option>
-                        <option value="qwen-2.5-coder-32b">qwen-2.5-coder-32b (32B Coding Specialist)</option>
-                        <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (8B Ultra Fast - 800+ tok/sec)</option>
-                        <option value="deepseek-r1-distill-llama-70b">deepseek-r1-distill-llama-70b (DeepSeek R1 Reasoning)</option>
+                        <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (20B Ultra Fast - 800+ tok/sec - Recommended)</option>
+                        <option value="openai/gpt-oss-120b">openai/gpt-oss-120b (120B Flagship Frontier - Deep Reasoning & Code)</option>
+                        <option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b (27B Qwen Coder Specialist)</option>
                       </select>
                     </div>
                   </div>

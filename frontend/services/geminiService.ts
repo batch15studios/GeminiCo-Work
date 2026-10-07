@@ -121,6 +121,43 @@ export interface GenerateResult {
   invokedGoogleApps?: string[];
 }
 
+export const resolveModelForProvider = (
+  provider: AIProvider,
+  requestedModel?: string,
+  settings?: AppSettings | null
+): string => {
+  if (provider === 'grok') {
+    if (requestedModel && requestedModel.startsWith('grok')) return requestedModel;
+    return settings?.grokModel?.trim() || 'grok-2-latest';
+  }
+  if (provider === 'groq') {
+    if (requestedModel && (requestedModel.startsWith('openai/') || requestedModel.startsWith('qwen/'))) return requestedModel;
+    let chosen = settings?.groqModel?.trim() || 'openai/gpt-oss-20b';
+    if (chosen.includes('8b') || chosen.includes('70b') || chosen.includes('qwen-2.5')) {
+      chosen = 'openai/gpt-oss-20b';
+    }
+    return chosen;
+  }
+  if (provider === 'openrouter') {
+    if (requestedModel && requestedModel.includes('/')) return requestedModel;
+    return settings?.openrouterModel?.trim() || 'meta-llama/llama-3.3-70b-instruct:free';
+  }
+  if (provider === 'ollama') {
+    if (requestedModel && !requestedModel.startsWith('gemini') && !requestedModel.startsWith('grok') && !requestedModel.startsWith('openai')) {
+      return requestedModel;
+    }
+    return settings?.ollamaModel?.trim() || 'qwen2.5-coder:1.5b';
+  }
+  if (provider === 'lmstudio') {
+    return 'local-model';
+  }
+  if (provider === 'gemini') {
+    if (requestedModel && requestedModel.startsWith('gemini')) return requestedModel;
+    return settings?.model || 'gemini-3.8-flash';
+  }
+  return settings?.customModel?.trim() || 'qwen2.5-coder:1.5b';
+};
+
 export const getProviderModelList = (
   provider: AIProvider,
   settings?: AppSettings | null
@@ -135,10 +172,9 @@ export const getProviderModelList = (
   }
   if (provider === 'groq') {
     return [
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', badge: 'Groq • 500 tok/s' },
-      { id: 'qwen-2.5-coder-32b', label: 'Qwen 2.5 Coder 32B', badge: 'Groq • Coding' },
-      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B', badge: 'Groq • 800 tok/s' },
-      { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1 70B', badge: 'Groq • Reasoning' }
+      { id: 'openai/gpt-oss-20b', label: 'GPT OSS 20B (Ultra Fast)', badge: 'Groq • 800 tok/s' },
+      { id: 'openai/gpt-oss-120b', label: 'GPT OSS 120B (Flagship)', badge: 'Groq • Frontier' },
+      { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Coder)', badge: 'Groq • Coding' },
     ];
   }
   if (provider === 'openrouter') {
@@ -150,13 +186,12 @@ export const getProviderModelList = (
     ];
   }
   if (provider === 'ollama') {
-    const custom = settings?.ollamaModel ? [{ id: settings.ollamaModel, label: settings.ollamaModel, badge: 'Ollama Installed' }] : [];
-    const defaults = [
-      { id: 'gemma2:2b', label: 'Gemma 2 2B', badge: 'Local PC' },
-      { id: 'llama3.2', label: 'Llama 3.2', badge: 'Local PC' },
-      { id: 'qwen2.5-coder:1.5b', label: 'Qwen Coder 1.5B', badge: 'Local PC' }
+    return [
+      { id: 'qwen2.5-coder:1.5b', label: 'Qwen 2.5 Coder 1.5B', badge: 'GPU Accelerated • Code' },
+      { id: 'deepseek-r1:1.5b', label: 'DeepSeek R1 1.5B', badge: 'GPU Accelerated • Reason' },
+      { id: 'gemma2:2b', label: 'Gemma 2 2B', badge: 'GPU Accelerated • Fast' },
+      { id: 'llama3:latest', label: 'Llama 3 8B', badge: 'Local PC' },
     ];
-    return custom.length > 0 && !defaults.some(d => d.id === custom[0].id) ? [...custom, ...defaults] : defaults;
   }
   if (provider === 'lmstudio') {
     return [
@@ -211,23 +246,20 @@ export const generateLocalModelResponse = async (
 
   // 2. Resolve endpoint, model, and authentication for Provider
   let endpoint = 'http://127.0.0.1:11434/v1/chat/completions';
-  let modelName = model || 'gemma2:2b';
+  let modelName = resolveModelForProvider(provider, model, settings);
   let apiKey = '';
 
   if (provider === 'grok') {
     endpoint = 'https://api.x.ai/v1/chat/completions';
-    modelName = settings?.grokModel?.trim() || (model && !model.startsWith('gemini') ? model : 'grok-2-latest');
     apiKey = settings?.grokApiKey?.trim() || '';
   } else if (provider === 'groq') {
     endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-    modelName = settings?.groqModel?.trim() || (model && !model.startsWith('gemini') ? model : 'llama-3.3-70b-versatile');
     apiKey = settings?.groqApiKey?.trim() || '';
     if (!apiKey) {
       throw new Error("GROQ_KEY_REQUIRED: Please enter your free Groq API key in Settings (⚙️). Get one instantly in 10 seconds (no credit card needed) at https://console.groq.com/keys");
     }
   } else if (provider === 'openrouter') {
     endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-    modelName = settings?.openrouterModel?.trim() || (model && !model.startsWith('gemini') ? model : 'meta-llama/llama-3.3-70b-instruct:free');
     apiKey = settings?.openrouterApiKey?.trim() || '';
     if (!apiKey) {
       throw new Error("OPENROUTER_KEY_REQUIRED: Please enter your OpenRouter API key in Settings (⚙️). Get one at https://openrouter.ai/keys");
@@ -237,13 +269,10 @@ export const generateLocalModelResponse = async (
     endpoint = baseUrl.endsWith('/v1/chat/completions')
       ? baseUrl
       : `${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`;
-    modelName = settings?.ollamaModel?.trim() || (model && !model.startsWith('gemini') ? model : 'gemma2:2b');
   } else if (provider === 'lmstudio') {
     endpoint = 'http://127.0.0.1:1234/v1/chat/completions';
-    modelName = (model && !model.startsWith('gemini')) ? model : 'local-model';
   } else if (provider === 'opencode' || provider === 'custom') {
     endpoint = settings?.customBaseUrl?.trim() || 'http://127.0.0.1:11434/v1/chat/completions';
-    modelName = settings?.customModel?.trim() || (model && !model.startsWith('gemini') ? model : 'gemma2:2b');
     apiKey = settings?.customApiKey?.trim() || '';
   }
 
@@ -408,21 +437,46 @@ Structure your response with:
     })
   });
 
+  let responseText = '';
   if (!res.ok) {
     const errText = await res.text();
-    let errorMsg = `Model request failed (${res.status})`;
-    try {
-      const parsed = JSON.parse(errText);
-      if (parsed.error) errorMsg = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
-    } catch {}
-    if (errorMsg.includes("doesn't have any credits") || errorMsg.includes("permission-denied")) {
-      throw new Error("⚠️ xAI Grok Prepaid Credits Required: Your team on xAI needs prepaid credits to respond. Visit https://console.x.ai to add credits, or switch to Groq Cloud (100% Free at 500+ tok/s) or Local Ollama in Settings (⚙️) to continue for free!");
+    // Auto-heal 404 model_not_found on Groq by falling back to active 20B engine
+    if (provider === 'groq' && (res.status === 404 || errText.includes('model_not_found')) && modelName !== 'openai/gpt-oss-20b') {
+      console.warn(`[Groq Auto-Healing] Model ${modelName} not found, automatically retrying with openai/gpt-oss-20b...`);
+      const retryRes = await fetch('/api/local/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint,
+          model: 'openai/gpt-oss-20b',
+          messages,
+          apiKey,
+          temperature: 0.7
+        })
+      });
+      if (retryRes.ok) {
+        const retryData = await retryRes.json();
+        responseText = retryData.text || '';
+      }
     }
-    throw new Error(errorMsg);
-  }
 
-  const data = await res.json();
-  const responseText = data.text || '';
+    if (!responseText) {
+      let errorMsg = `Model request failed (${res.status})`;
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed.error) {
+          errorMsg = typeof parsed.error === 'string' ? parsed.error : (parsed.error.message || JSON.stringify(parsed.error));
+        }
+      } catch {}
+      if (errorMsg.includes("doesn't have any credits") || errorMsg.includes("permission-denied")) {
+        throw new Error("⚠️ xAI Grok Prepaid Credits Required: Your team on xAI needs prepaid credits to respond. Visit https://console.x.ai to add credits, or switch to Groq Cloud (100% Free at 500+ tok/s) or Local Ollama in Settings (⚙️) to continue for free!");
+      }
+      throw new Error(errorMsg);
+    }
+  } else {
+    const data = await res.json();
+    responseText = data.text || '';
+  }
 
   // Update research steps if research mode
   if (outputMode === 'research' && researchSteps) {

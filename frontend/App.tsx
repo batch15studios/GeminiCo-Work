@@ -32,7 +32,7 @@ import {
   DEFAULT_MCP_SERVERS,
   DEFAULT_GOOGLE_WORKSPACE_INTEGRATIONS 
 } from './constants';
-import { generateGeminiResponse, setActiveApiKey } from './services/geminiService';
+import { generateGeminiResponse, setActiveApiKey, getProviderModelList, resolveModelForProvider } from './services/geminiService';
 import { initAuthSession, syncUserDataToCloud } from './services/firebaseService';
 import { fetchWorkspaceFiles, readWorkspaceFile } from './services/filesystemService';
 import { User } from 'firebase/auth';
@@ -53,14 +53,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   voiceGender: 'male',
   soundEffects: true,
   autoCloudSync: true,
-  aiProvider: 'grok',
+  aiProvider: 'groq',
   grokApiKey: '',
   grokModel: 'grok-2-latest',
-  groqModel: 'llama-3.3-70b-versatile',
+  groqModel: 'openai/gpt-oss-20b',
   ollamaBaseUrl: 'http://127.0.0.1:11434',
-  ollamaModel: 'gemma2:2b',
+  ollamaModel: 'qwen2.5-coder:1.5b',
   customBaseUrl: 'http://127.0.0.1:11434/v1',
-  customModel: 'gemma2:2b'
+  customModel: 'qwen2.5-coder:1.5b'
 };
 
 export default function App() {
@@ -70,9 +70,14 @@ export default function App() {
     try {
       const stored = localStorage.getItem(STORAGE_SETTINGS_KEY);
       const parsed = stored ? JSON.parse(stored) : {};
+      let groqModel = parsed.groqModel || DEFAULT_SETTINGS.groqModel;
+      if (groqModel && (groqModel.includes('8b') || groqModel.includes('70b') || groqModel.includes('qwen-2.5'))) {
+        groqModel = 'openai/gpt-oss-20b';
+      }
       return {
         ...DEFAULT_SETTINGS,
         ...parsed,
+        groqModel,
         grokApiKey: parsed.grokApiKey || DEFAULT_SETTINGS.grokApiKey,
       };
     } catch {
@@ -214,6 +219,16 @@ export default function App() {
       console.warn('LocalStorage save error:', e);
     }
   }, [settings]);
+
+  // Auto-synchronize session model with active provider
+  useEffect(() => {
+    const provider = settings.aiProvider || (settings.apiKey ? 'gemini' : 'groq');
+    const validModels = getProviderModelList(provider, settings);
+    if (!validModels.some(m => m.id === activeSession.model)) {
+      const resolved = resolveModelForProvider(provider, undefined, settings);
+      handleUpdateActiveSession({ model: resolved as ModelType });
+    }
+  }, [settings.aiProvider, settings.groqModel, settings.grokModel, settings.ollamaModel, activeSessionId]);
 
   useEffect(() => {
     try {
@@ -824,9 +839,9 @@ export default function App() {
                 <span>
                   <strong>Active Engine:</strong> {
                     settings.aiProvider === 'grok' ? `xAI Grok (${settings.grokModel || 'grok-2-latest'})` :
-                    settings.aiProvider === 'groq' ? `Groq Cloud LPU (${settings.groqModel || 'llama-3.3-70b-versatile'} • 500+ tok/s Free)` :
+                    settings.aiProvider === 'groq' ? `Groq Cloud LPU (${settings.groqModel || 'openai/gpt-oss-20b'} • 800+ tok/s Free)` :
                     settings.aiProvider === 'openrouter' ? `OpenRouter (${settings.openrouterModel || 'Llama 3.3 70B'})` :
-                    settings.aiProvider === 'ollama' ? `Local Ollama (${settings.ollamaModel || 'gemma2:2b'})` :
+                    settings.aiProvider === 'ollama' ? `Local Ollama (${settings.ollamaModel || 'qwen2.5-coder:1.5b'})` :
                     settings.aiProvider === 'lmstudio' ? 'LM Studio (Local)' : 'Custom API'
                   }
                 </span>
