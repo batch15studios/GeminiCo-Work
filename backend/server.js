@@ -563,6 +563,127 @@ app.post('/api/config/key', async (req, res) => {
 });
 
 // ==========================================
+// LOCAL & MULTI-PROVIDER MODEL APIS (Ollama / LM Studio / OpenCode / OpenAI-Compatible)
+// ==========================================
+
+// GET /api/local/status - Check local Ollama health and list models
+app.get('/api/local/status', async (req, res) => {
+  const ollamaUrl = req.query.url || 'http://127.0.0.1:11434';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const resp = await fetch(`${ollamaUrl}/api/tags`, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const models = (data.models || []).map(m => ({
+        name: m.name,
+        size: m.size,
+        modifiedAt: m.modified_at,
+        details: m.details
+      }));
+      return res.json({ online: true, models, provider: 'ollama' });
+    }
+  } catch (err) {
+    // Offline or unreachable
+  }
+  return res.json({ online: false, models: [], provider: 'ollama' });
+});
+
+// POST /api/local/start - Attempt to launch Ollama background daemon
+app.post('/api/local/start', async (req, res) => {
+  try {
+    const ollamaPath = "C:\\Users\\Ryan\\AppData\\Local\\Programs\\Ollama\\ollama.exe";
+    if (fsSync.existsSync(ollamaPath)) {
+      exec(`start "" /min "${ollamaPath}" serve`, { windowsHide: true });
+      return res.json({ success: true, message: 'Ollama background daemon started.' });
+    } else {
+      exec('start "" /min ollama serve', { windowsHide: true });
+      return res.json({ success: true, message: 'Triggered ollama serve via PATH.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/local/chat - Universal OpenAI-compatible chat completion proxy
+app.post('/api/local/chat', async (req, res) => {
+  try {
+    const { 
+      endpoint = 'http://127.0.0.1:11434/v1/chat/completions', 
+      model = 'gemma2:2b', 
+      messages = [], 
+      temperature = 0.7, 
+      apiKey = '' 
+    } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (apiKey && apiKey.trim()) {
+      headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+    }
+
+    const payload = {
+      model,
+      messages,
+      temperature,
+      stream: false
+    };
+
+    const targetUrl = endpoint.endsWith('/chat/completions') 
+      ? endpoint 
+      : `${endpoint.replace(/\/+$/, '')}/chat/completions`;
+
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(response.status).json({ 
+        error: `Model request failed (${response.status}): ${errText}` 
+      });
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content || '';
+    return res.json({
+      text: content,
+      model: data?.model || model,
+      usage: data?.usage,
+      raw: data
+    });
+  } catch (err) {
+    console.error('Local model chat error:', err);
+    res.status(500).json({ error: err.message || 'Failed to communicate with local model provider' });
+  }
+});
+
+// POST /api/local/pull - Pull a new model via Ollama
+app.post('/api/local/pull', async (req, res) => {
+  try {
+    const { model } = req.body;
+    if (!model) return res.status(400).json({ error: 'Model name required' });
+    exec(`ollama pull ${model}`, (err, stdout, stderr) => {
+      if (err) {
+        console.error('Pull model error:', err);
+      }
+    });
+    res.json({ success: true, message: `Pull initiated for ${model}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // 1. FILE SYSTEM APIS (Real Local Disk Sync)
 // ==========================================
 const WORKSPACE_ROOT = path.resolve(process.cwd(), '..');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Settings, 
@@ -31,7 +31,12 @@ import {
   Globe,
   Lock,
   Download,
-  ExternalLink
+  ExternalLink,
+  Cpu,
+  Bot,
+  Play,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { 
@@ -43,9 +48,11 @@ import {
   Skill, 
   MCPServer, 
   MCPAuthType,
+  AIProvider,
   OAuthConfig,
   UpdateInfo 
 } from '../types';
+import { checkLocalModelStatus, startLocalOllamaServer, pullLocalModel } from '../services/geminiService';
 import { 
   loginWithEmail, 
   registerWithEmail, 
@@ -158,6 +165,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [customHeaderVal, setCustomHeaderVal] = useState('');
 
   const [testingId, setTestingId] = useState<string | null>(null);
+
+  // Local Models & Multi-Provider state
+  const [ollamaStatus, setOllamaStatus] = useState<{ online: boolean; models: Array<{ name: string; size?: number }> }>({ online: false, models: [] });
+  const [isCheckingOllama, setIsCheckingOllama] = useState(false);
+  const [isStartingOllama, setIsStartingOllama] = useState(false);
+  const [pullModelName, setPullModelName] = useState('');
+  const [pullStatus, setPullStatus] = useState<string | null>(null);
+
+  const fetchOllamaStatus = async () => {
+    setIsCheckingOllama(true);
+    try {
+      const res = await checkLocalModelStatus(settings.ollamaBaseUrl);
+      setOllamaStatus({ online: res.online, models: res.models });
+      if (res.online && res.models.length > 0 && !settings.ollamaModel) {
+        onUpdateSettings({ ...settings, ollamaModel: res.models[0].name });
+      }
+    } catch {}
+    setIsCheckingOllama(false);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchOllamaStatus();
+    }
+  }, [isOpen, activeTab]);
+
+  const handleStartOllama = async () => {
+    setIsStartingOllama(true);
+    await startLocalOllamaServer();
+    setTimeout(async () => {
+      await fetchOllamaStatus();
+      setIsStartingOllama(false);
+    }, 2500);
+  };
+
+  const handlePullModel = async (modelToPull?: string) => {
+    const target = (modelToPull || pullModelName).trim();
+    if (!target) return;
+    setPullStatus(`Downloading ${target} via Ollama...`);
+    const ok = await pullLocalModel(target);
+    if (ok) {
+      setPullStatus(`Pull initiated for ${target}. It will appear once finished.`);
+      setTimeout(fetchOllamaStatus, 6000);
+    } else {
+      setPullStatus(`Failed to initiate model download.`);
+    }
+  };
 
   // GitHub Updates state
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -1397,76 +1451,352 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* TAB: PREFERENCES */}
+            {/* TAB: PREFERENCES & AI ENGINE */}
             {activeTab === 'preferences' && (
-              <div className="p-4 bg-[#262626] border border-[#333333] rounded-[6px] space-y-4">
-                <h3 className="text-xs font-semibold text-white">General & AI Engine Preferences</h3>
-                
+              <div className="p-4 bg-[#262626] border border-[#333333] rounded-[6px] space-y-4 overflow-y-auto max-h-[68vh]">
                 <div>
-                  <label className="block text-[11px] text-[#aaaaaa] mb-1">User Display Name</label>
-                  <input
-                    type="text"
-                    value={settings.userName}
-                    onChange={(e) => onUpdateSettings({ ...settings, userName: e.target.value })}
-                    className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
-                  />
-                </div>
-
-                <div className="pt-2 border-t border-[#333333]">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-semibold text-[#60cdff]">
-                      Google Gemini API Key
-                    </label>
-                    <a
-                      href="https://aistudio.google.com/apikey"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[10px] text-[#60cdff] hover:underline"
-                    >
-                      Get key from Google AI Studio ↗
-                    </a>
-                  </div>
-                  <p className="text-[10px] text-[#888888] mb-1.5 leading-relaxed">
-                    Powers Gemini 3.8 Flash, 3.7 Flash, and Live Voice directly. Works with your Google account's free tier or AI Pro credits.
+                  <h3 className="text-xs font-semibold text-white flex items-center space-x-1.5">
+                    <Cpu className="w-4 h-4 text-[#60cdff]" />
+                    <span>AI Model Provider & Engine</span>
+                  </h3>
+                  <p className="text-[11px] text-[#888888] mt-0.5">
+                    Choose your AI provider. Run free offline local models (Ollama / LM Studio) with zero API credits, OpenCode models, or Google Gemini.
                   </p>
-                  <input
-                    type="password"
-                    value={settings.apiKey || ''}
-                    onChange={(e) => onUpdateSettings({ ...settings, apiKey: e.target.value })}
-                    placeholder="AIzaSy..."
-                    className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#60cdff]"
-                  />
                 </div>
 
-                <div className="pt-2 border-t border-[#333333]">
-                  <label className="block text-[11px] font-medium text-[#cccccc] mb-1">
-                    Google Cloud Project ID
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.googleCloudProject || 'helpful-valve-504500-j5'}
-                    onChange={(e) => onUpdateSettings({ ...settings, googleCloudProject: e.target.value })}
-                    placeholder="your-project-id"
-                    className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
-                  />
-                </div>
-
-                <div className="pt-2 border-t border-[#333333] flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-white block">Auto Grounding with Google Search</span>
-                    <span className="text-[10px] text-[#888888]">Enable web citations by default on research queries</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateSettings({ ...settings, autoGrounding: !settings.autoGrounding })}
-                    className={`w-9 h-4.5 rounded-full transition-colors relative ${
-                      settings.autoGrounding ? 'bg-[#0078d4]' : 'bg-[#444444]'
+                {/* Provider Selection Grid */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {/* Ollama Local Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'ollama' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      (settings.aiProvider === 'ollama' || (!settings.aiProvider && !settings.apiKey))
+                        ? 'bg-[#1b3d2b]/60 border-[#276e4c] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${
-                      settings.autoGrounding ? 'left-4.5' : 'left-0.5'
-                    }`} />
-                  </button>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">🦙</span>
+                        <span className="text-xs font-semibold text-white">Local AI (Ollama)</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#163827] text-[#58d68d] border border-[#276e4c]">
+                        100% Free
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      Runs completely on your PC with GPU/CPU acceleration. Zero API credits or keys needed.
+                    </p>
+                  </div>
+
+                  {/* LM Studio Local Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'lmstudio' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      settings.aiProvider === 'lmstudio'
+                        ? 'bg-[#192f42]/60 border-[#255275] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">💻</span>
+                        <span className="text-xs font-semibold text-white">LM Studio</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#142838] text-[#60cdff] border border-[#204a6b]">
+                        Local GGUF
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      Connects to LM Studio on port 1234. Load any Hugging Face model locally with 1 click.
+                    </p>
+                  </div>
+
+                  {/* OpenCode / Custom Endpoint Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'opencode' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      (settings.aiProvider === 'opencode' || settings.aiProvider === 'custom')
+                        ? 'bg-[#2b1f3d]/60 border-[#4b336d] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">🌐</span>
+                        <span className="text-xs font-semibold text-white">OpenCode / Custom</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#2b1b42] text-[#bb86fc] border border-[#482875]">
+                        OpenAI API
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      OpenCode models (Nemotron, Muse), OpenRouter free tiers, or any OpenAI-compatible URL.
+                    </p>
+                  </div>
+
+                  {/* Google Gemini Card */}
+                  <div
+                    onClick={() => onUpdateSettings({ ...settings, aiProvider: 'gemini' })}
+                    className={`p-3 rounded-[6px] border cursor-pointer transition flex flex-col justify-between ${
+                      settings.aiProvider === 'gemini'
+                        ? 'bg-[#2a2412]/60 border-[#6b541d] text-white shadow-sm'
+                        : 'bg-[#1e1e1e] border-[#333333] text-[#aaaaaa] hover:border-[#444444]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">🌟</span>
+                        <span className="text-xs font-semibold text-white">Google Gemini</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#332512] text-[#ffb86c] border border-[#63441a]">
+                        Cloud Pro
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-tight">
+                      Official Gemini 3.8/3.7 models and Live Voice via Google AI Studio API key.
+                    </p>
+                  </div>
+                </div>
+
+                {/* PROVIDER DETAIL SECTIONS */}
+                
+                {/* 1. OLLAMA SETTINGS */}
+                {(settings.aiProvider === 'ollama' || (!settings.aiProvider && !settings.apiKey)) && (
+                  <div className="p-3 bg-[#1c241f] border border-[#276e4c]/50 rounded-[6px] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${ollamaStatus.online ? 'bg-[#58d68d]' : 'bg-[#e74c3c]'}`} />
+                        <span className="text-xs font-semibold text-white">
+                          Ollama Status: {ollamaStatus.online ? 'Connected' : 'Offline'}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {!ollamaStatus.online && (
+                          <button
+                            type="button"
+                            onClick={handleStartOllama}
+                            disabled={isStartingOllama}
+                            className="px-2 py-1 bg-[#276e4c] hover:bg-[#1f573c] text-white text-[11px] font-medium rounded-[4px] transition flex items-center space-x-1"
+                          >
+                            <Play className="w-3 h-3" />
+                            <span>{isStartingOllama ? 'Starting...' : 'Start Ollama'}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={fetchOllamaStatus}
+                          disabled={isCheckingOllama}
+                          className="px-2 py-1 bg-[#28382e] hover:bg-[#344a3c] text-[#a0c8af] text-[11px] rounded-[4px] transition flex items-center space-x-1"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${isCheckingOllama ? 'animate-spin' : ''}`} />
+                          <span>Refresh</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Installed Models Select */}
+                    <div>
+                      <label className="block text-[11px] text-[#cccccc] mb-1 font-medium">
+                        Active Local Model ({ollamaStatus.models.length} installed on disk)
+                      </label>
+                      {ollamaStatus.models.length > 0 ? (
+                        <select
+                          value={settings.ollamaModel || ollamaStatus.models[0].name}
+                          onChange={(e) => onUpdateSettings({ ...settings, ollamaModel: e.target.value })}
+                          className="w-full bg-[#141b16] border border-[#276e4c] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                        >
+                          {ollamaStatus.models.map((m) => (
+                            <option key={m.name} value={m.name}>
+                              {m.name} {m.size ? `(${(m.size / (1024 * 1024 * 1024)).toFixed(1)} GB)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={settings.ollamaModel || 'gemma2:2b'}
+                          onChange={(e) => onUpdateSettings({ ...settings, ollamaModel: e.target.value })}
+                          placeholder="e.g. gemma2:2b, llama3:latest"
+                          className="w-full bg-[#141b16] border border-[#276e4c] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                        />
+                      )}
+                    </div>
+
+                    {/* Download / Pull Model */}
+                    <div className="pt-2 border-t border-[#276e4c]/30">
+                      <label className="block text-[11px] text-[#888888] mb-1">
+                        Download / Pull Additional Model:
+                      </label>
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={pullModelName}
+                          onChange={(e) => setPullModelName(e.target.value)}
+                          placeholder="e.g. qwen2.5-coder:1.5b, deepseek-r1:1.5b"
+                          className="flex-1 bg-[#141b16] border border-[#276e4c]/50 rounded-[4px] px-2.5 py-1 text-xs text-white font-mono focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handlePullModel()}
+                          className="px-2.5 py-1 bg-[#276e4c] hover:bg-[#1f573c] text-white text-[11px] font-medium rounded-[4px] transition flex items-center space-x-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Pull</span>
+                        </button>
+                      </div>
+                      <div className="flex items-center space-x-1.5 mt-2">
+                        <span className="text-[10px] text-[#777777]">Quick add:</span>
+                        <button
+                          type="button"
+                          onClick={() => handlePullModel('qwen2.5-coder:1.5b')}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-[#16291e] hover:bg-[#203d2c] text-[#58d68d] border border-[#276e4c]/40 font-mono"
+                        >
+                          + qwen2.5-coder:1.5b
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePullModel('deepseek-r1:1.5b')}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-[#16291e] hover:bg-[#203d2c] text-[#58d68d] border border-[#276e4c]/40 font-mono"
+                        >
+                          + deepseek-r1:1.5b
+                        </button>
+                      </div>
+                      {pullStatus && (
+                        <p className="text-[10px] text-[#58d68d] mt-1 font-mono">{pullStatus}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. LM STUDIO SETTINGS */}
+                {settings.aiProvider === 'lmstudio' && (
+                  <div className="p-3 bg-[#16232e] border border-[#204a6b] rounded-[6px] space-y-2.5">
+                    <div className="flex items-center space-x-2 text-xs font-semibold text-white">
+                      <span>💻</span>
+                      <span>LM Studio Local Server</span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-relaxed">
+                      Make sure the <strong>Local Server</strong> tab is running in LM Studio (default: port 1234). Any loaded model will respond.
+                    </p>
+                    <div>
+                      <label className="block text-[11px] text-[#aaaaaa] mb-1">LM Studio Endpoint</label>
+                      <input
+                        type="text"
+                        value={settings.customBaseUrl || 'http://127.0.0.1:1234/v1'}
+                        onChange={(e) => onUpdateSettings({ ...settings, customBaseUrl: e.target.value })}
+                        placeholder="http://127.0.0.1:1234/v1"
+                        className="w-full bg-[#111c26] border border-[#255275] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. OPENCODE / CUSTOM SETTINGS */}
+                {(settings.aiProvider === 'opencode' || settings.aiProvider === 'custom') && (
+                  <div className="p-3 bg-[#261c36] border border-[#482875] rounded-[6px] space-y-2.5">
+                    <div className="flex items-center space-x-2 text-xs font-semibold text-white">
+                      <span>🌐</span>
+                      <span>OpenCode & OpenAI-Compatible Endpoint</span>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-relaxed">
+                      Connect to OpenCode contributor models, OpenRouter free models, or any OpenAI-compatible API gateway.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] text-[#aaaaaa] mb-1">Base Endpoint URL</label>
+                        <input
+                          type="text"
+                          value={settings.customBaseUrl || 'http://127.0.0.1:11434/v1'}
+                          onChange={(e) => onUpdateSettings({ ...settings, customBaseUrl: e.target.value })}
+                          placeholder="http://localhost:11434/v1 or https://openrouter.ai/api/v1"
+                          className="w-full bg-[#1a1326] border border-[#482875] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-[#aaaaaa] mb-1">Model Name / ID</label>
+                        <input
+                          type="text"
+                          value={settings.customModel || 'nemotron-3.5-lightning-free'}
+                          onChange={(e) => onUpdateSettings({ ...settings, customModel: e.target.value })}
+                          placeholder="nemotron-3.5-lightning-free or gemma2:2b"
+                          className="w-full bg-[#1a1326] border border-[#482875] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#aaaaaa] mb-1">API Key (Optional for local)</label>
+                      <input
+                        type="password"
+                        value={settings.customApiKey || ''}
+                        onChange={(e) => onUpdateSettings({ ...settings, customApiKey: e.target.value })}
+                        placeholder="sk-... (Leave empty for local models)"
+                        className="w-full bg-[#1a1326] border border-[#482875] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. GOOGLE GEMINI SETTINGS */}
+                {settings.aiProvider === 'gemini' && (
+                  <div className="p-3 bg-[#241e17] border border-[#63441a] rounded-[6px] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-[#ffb86c]">
+                        Google Gemini API Key
+                      </label>
+                      <a
+                        href="https://aistudio.google.com/apikey"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] text-[#ffb86c] hover:underline"
+                      >
+                        Get key from Google AI Studio ↗
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-[#888888] leading-relaxed">
+                      Powers Gemini 3.8 Flash, 3.7 Flash, and Live Voice directly.
+                    </p>
+                    <input
+                      type="password"
+                      value={settings.apiKey || ''}
+                      onChange={(e) => onUpdateSettings({ ...settings, apiKey: e.target.value })}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-[#1c1813] border border-[#63441a] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* GENERAL PREFERENCES */}
+                <div className="pt-3 border-t border-[#333333] space-y-3">
+                  <div>
+                    <label className="block text-[11px] text-[#aaaaaa] mb-1">User Display Name</label>
+                    <input
+                      type="text"
+                      value={settings.userName}
+                      onChange={(e) => onUpdateSettings({ ...settings, userName: e.target.value })}
+                      className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  {settings.aiProvider === 'gemini' && (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-white block">Auto Grounding with Google Search</span>
+                        <span className="text-[10px] text-[#888888]">Enable web citations by default on research queries</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateSettings({ ...settings, autoGrounding: !settings.autoGrounding })}
+                        className={`w-9 h-4.5 rounded-full transition-colors relative ${
+                          settings.autoGrounding ? 'bg-[#0078d4]' : 'bg-[#444444]'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${
+                          settings.autoGrounding ? 'left-4.5' : 'left-0.5'
+                        }`} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -12,7 +12,9 @@ import {
   WorkspaceFile,
   Skill,
   MCPServer,
-  GoogleWorkspaceItem
+  GoogleWorkspaceItem,
+  AIProvider,
+  AppSettings
 } from '../types';
 
 let activeApiKey: string | null = null;
@@ -36,6 +38,45 @@ export const getStoredApiKey = (): string | null => {
   return null;
 };
 
+export const getStoredSettings = (): AppSettings | null => {
+  try {
+    const stored = localStorage.getItem('gemini_cowork_settings_v1');
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return null;
+};
+
+export const checkLocalModelStatus = async (url?: string): Promise<{ online: boolean; models: Array<{ name: string; size?: number }>; provider: string }> => {
+  try {
+    const q = url ? `?url=${encodeURIComponent(url)}` : '';
+    const r = await fetch(`/api/local/status${q}`);
+    if (r.ok) return await r.json();
+  } catch {}
+  return { online: false, models: [], provider: 'ollama' };
+};
+
+export const startLocalOllamaServer = async (): Promise<boolean> => {
+  try {
+    const r = await fetch('/api/local/start', { method: 'POST' });
+    return r.ok;
+  } catch {
+    return false;
+  }
+};
+
+export const pullLocalModel = async (model: string): Promise<boolean> => {
+  try {
+    const r = await fetch('/api/local/pull', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model })
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+};
+
 export const sanitizeModel = (m: ModelType | string): string => {
   if (!m || m === 'gemini-3.8-live') {
     return 'gemini-3.8-flash';
@@ -49,7 +90,7 @@ export const getGenAIClient = (overrideApiKey?: string) => {
     return new GoogleGenAI({ apiKey: key.trim() });
   }
 
-  throw new Error("GEMINI_KEY_REQUIRED: Please enter your Gemini API Key in Settings (⚙️) or the top banner to start chatting.");
+  throw new Error("GEMINI_KEY_REQUIRED: Please enter your Gemini API Key in Settings (⚙️) or switch to Local AI (Ollama) to chat for free.");
 };
 
 export interface GenerateOptions {
@@ -80,6 +121,163 @@ export interface GenerateResult {
   invokedGoogleApps?: string[];
 }
 
+export const generateLocalModelResponse = async (
+  options: GenerateOptions,
+  provider: AIProvider,
+  settings: AppSettings | null
+): Promise<GenerateResult> => {
+  const { 
+    model, 
+    outputMode = 'chat', 
+    prompt, 
+    history = [],
+    systemInstruction, 
+    currentCanvasContent,
+    projectContextFiles = [],
+    activeSkills = [],
+    activeMcpServers = [],
+    selectedGoogleItems = []
+  } = options;
+
+  let endpoint = 'http://127.0.0.1:11434/v1/chat/completions';
+  let modelName = model || 'gemma2:2b';
+  let apiKey = '';
+
+  if (provider === 'ollama') {
+    const baseUrl = settings?.ollamaBaseUrl?.trim() || 'http://127.0.0.1:11434';
+    endpoint = baseUrl.endsWith('/v1/chat/completions')
+      ? baseUrl
+      : `${baseUrl.replace(/\/+$/, '')}/v1/chat/completions`;
+    modelName = settings?.ollamaModel?.trim() || model || 'gemma2:2b';
+  } else if (provider === 'lmstudio') {
+    endpoint = 'http://127.0.0.1:1234/v1/chat/completions';
+    modelName = model || 'local-model';
+  } else if (provider === 'opencode' || provider === 'custom') {
+    endpoint = settings?.customBaseUrl?.trim() || 'http://127.0.0.1:11434/v1/chat/completions';
+    modelName = settings?.customModel?.trim() || model || 'gemma2:2b';
+    apiKey = settings?.customApiKey?.trim() || '';
+  }
+
+  // System instructions tailored for mode
+  let sysPrompt = 'You are an expert AI engineering assistant in Gemini Co-Work.';
+  if (outputMode === 'architect') {
+    sysPrompt = 'You are a Senior Principal Software Architect. Write high-performance, modular, production-ready code with complete implementations inside markdown code blocks (e.g. ```tsx or ```html).';
+  } else if (outputMode === 'canvas') {
+    sysPrompt = 'You are an interactive Canvas UI engineer. Generate full, standalone, interactive HTML/CSS/Tailwind UI or React components inside markdown code blocks (e.g. ```html or ```tsx).';
+  } else if (systemInstruction) {
+    sysPrompt = systemInstruction;
+  }
+
+  // Inject Skills & MCP Tools
+  if (activeSkills.length > 0) {
+    sysPrompt += `\n\nActive Skills in scope:\n` + activeSkills.map(s => `- ${s.name}: ${s.description}`).join('\n');
+  }
+  if (activeMcpServers.length > 0) {
+    sysPrompt += `\n\nAvailable MCP Tools in scope:\n` + activeMcpServers.flatMap(m => m.tools.map(t => `- ${m.name}_${t.name}: ${t.description}`)).join('\n');
+  }
+
+  // Build project files context
+  const referencedFileNames: string[] = [];
+  let projectFilesContext = '';
+  if (projectContextFiles.length > 0) {
+    projectFilesContext = `\n\n--- ACTIVE PROJECT WORKSPACE FILES (${projectContextFiles.length} files) ---\n`;
+    projectContextFiles.forEach(file => {
+      referencedFileNames.push(file.name);
+      projectFilesContext += `\n[FILE: ${file.path}]\n\`\`\`${file.extension}\n${file.content}\n\`\`\`\n`;
+    });
+    projectFilesContext += `--- END OF WORKSPACE FILES ---\n`;
+  }
+
+  // Canvas context if iterating
+  let canvasContext = '';
+  if (outputMode === 'canvas' && currentCanvasContent) {
+    canvasContext = `\n\n--- CURRENT CANVAS DOCUMENT ---\n${currentCanvasContent}\n-------------------------------\nProvide the updated complete code inside a fenced markdown code block.\n`;
+  }
+
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: sysPrompt }
+  ];
+
+  history.forEach(h => {
+    messages.push({
+      role: h.role === 'model' ? 'assistant' : 'user',
+      content: h.text
+    });
+  });
+
+  const fullPrompt = `${projectFilesContext}${canvasContext}${prompt}`.trim();
+  messages.push({ role: 'user', content: fullPrompt });
+
+  const res = await fetch('/api/local/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      endpoint,
+      model: modelName,
+      messages,
+      apiKey,
+      temperature: 0.7
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    let errorMsg = `Model request failed (${res.status})`;
+    try {
+      const parsed = JSON.parse(errText);
+      if (parsed.error) errorMsg = parsed.error;
+    } catch {}
+    throw new Error(errorMsg);
+  }
+
+  const data = await res.json();
+  const responseText = data.text || '';
+
+  // Extract Canvas Artifact
+  let createdArtifact: CanvasArtifact | undefined;
+  const isCanvasTarget = outputMode === 'canvas' || outputMode === 'architect';
+  const codeBlockMatch = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/.exec(responseText);
+
+  if (codeBlockMatch && (isCanvasTarget || responseText.length > 300)) {
+    const detectedLang = codeBlockMatch[1].toLowerCase() || 'markdown';
+    const extractedCode = codeBlockMatch[2];
+
+    let artType: CanvasArtifact['type'] = 'code';
+    if (detectedLang === 'html' || detectedLang === 'xml') artType = 'html';
+    else if (detectedLang === 'tsx' || detectedLang === 'jsx' || detectedLang === 'react') artType = 'react';
+    else if (detectedLang === 'markdown' || detectedLang === 'md') artType = 'markdown';
+
+    const titleWords = prompt.split(' ').slice(0, 5).join(' ');
+    const title = outputMode === 'architect'
+      ? `${titleWords.charAt(0).toUpperCase() + titleWords.slice(1)} (Architecture)`
+      : titleWords ? `${titleWords.charAt(0).toUpperCase() + titleWords.slice(1)}` : 'Canvas Workspace';
+
+    createdArtifact = {
+      id: 'artifact-' + Date.now(),
+      title,
+      type: artType,
+      language: detectedLang,
+      content: extractedCode,
+      currentVersion: 1,
+      versions: [{
+        version: 1,
+        timestamp: Date.now(),
+        content: extractedCode,
+        description: `Generated by ${modelName} (${provider.toUpperCase()})`
+      }]
+    };
+  }
+
+  return {
+    text: responseText,
+    createdArtifact,
+    referencedFiles: referencedFileNames,
+    invokedSkills: activeSkills.map(s => s.name),
+    invokedMcpTools: activeMcpServers.flatMap(m => m.tools.map(t => `${m.name}: ${t.name}`)),
+    invokedGoogleApps: selectedGoogleItems.map(g => `${g.appType.toUpperCase()}: ${g.title}`)
+  };
+};
+
 export const generateGeminiResponse = async (options: GenerateOptions): Promise<GenerateResult> => {
   const { 
     model, 
@@ -95,6 +293,14 @@ export const generateGeminiResponse = async (options: GenerateOptions): Promise<
     selectedGoogleItems = [],
     onResearchProgress
   } = options;
+
+  const settings = getStoredSettings();
+  const currentProvider: AIProvider = settings?.aiProvider || (getStoredApiKey() ? 'gemini' : 'ollama');
+
+  // If using local or custom model provider, route to local handler
+  if (currentProvider !== 'gemini') {
+    return generateLocalModelResponse(options, currentProvider, settings);
+  }
 
   const ai = getGenAIClient();
 

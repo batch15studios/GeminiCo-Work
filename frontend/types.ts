@@ -1,3 +1,5 @@
+export type AIProvider = 'gemini' | 'ollama' | 'lmstudio' | 'opencode' | 'custom';
+
 export type ModelType = 
   | 'gemini-3.8-flash'
   | 'gemini-3.7-flash'
@@ -8,7 +10,8 @@ export type ModelType =
   | 'gemini-2.5-pro'
   | 'gemini-2.5-flash'
   | 'gemini-2.0-flash'
-  | 'gemini-2.0-pro';
+  | 'gemini-2.0-pro'
+  | (string & {});
 
 export type OutputMode = 'chat' | 'canvas' | 'notebook' | 'audio' | 'image' | 'research' | 'architect';
 
@@ -223,6 +226,13 @@ export interface AppSettings {
   apiKey?: string;
   googleCloudProject?: string;
   useLocalFileSystem?: boolean;
+  // Multi-Provider & Local Model Settings
+  aiProvider?: AIProvider;
+  ollamaBaseUrl?: string;
+  ollamaModel?: string;
+  customBaseUrl?: string;
+  customModel?: string;
+  customApiKey?: string;
 }
 
 export interface UpdateInfo {

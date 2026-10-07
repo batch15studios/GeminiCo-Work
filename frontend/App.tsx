@@ -49,10 +49,15 @@ const STORAGE_GOOGLE_KEY = 'gemini_cowork_google_v1';
 const DEFAULT_SETTINGS: AppSettings = {
   userName: 'User',
   theme: 'dark',
-  autoGrounding: true,
+  autoGrounding: false,
   voiceGender: 'male',
   soundEffects: true,
-  autoCloudSync: true
+  autoCloudSync: true,
+  aiProvider: 'ollama',
+  ollamaBaseUrl: 'http://127.0.0.1:11434',
+  ollamaModel: 'gemma2:2b',
+  customBaseUrl: 'http://127.0.0.1:11434/v1',
+  customModel: 'gemma2:2b'
 };
 
 export default function App() {
@@ -766,32 +771,49 @@ export default function App() {
             )}
           </div>
 
-          {/* Missing API Key Guidance Banner */}
-          {!settings.apiKey && (
+          {/* Active Provider & Key Status Banner */}
+          {settings.aiProvider === 'gemini' && !settings.apiKey && (
             <div className="mx-4 mb-2 p-2 bg-[#2a1c0d] border border-[#d97706]/40 rounded-[6px] flex items-center justify-between text-xs text-[#fcd34d]">
               <div className="flex items-center space-x-2">
                 <span className="text-sm">🔑</span>
                 <span>
-                  <strong>Gemini API Key Required:</strong> To enable Gemini 3.8 / 3.7 models, please enter your Gemini API key.
+                  <strong>Gemini API Key Required:</strong> To enable Gemini cloud models, please enter your API key or switch to Local AI (Ollama).
                 </span>
               </div>
               <div className="flex items-center space-x-2">
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] underline text-[#fde68a] hover:text-white"
-                >
-                  Get Free Key
-                </a>
                 <button
                   type="button"
-                  onClick={() => openSettingsOnTab('general')}
+                  onClick={() => handleUpdateSettings({ ...settings, aiProvider: 'ollama', ollamaModel: settings.ollamaModel || 'gemma2:2b' })}
+                  className="px-2 py-0.5 bg-[#1b3d2b] hover:bg-[#275a3e] text-[#58d68d] border border-[#276e4c] rounded-[3px] text-[11px] transition font-medium"
+                >
+                  Switch to Free Local AI (Ollama)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openSettingsOnTab('preferences')}
                   className="px-2 py-0.5 bg-[#d97706] hover:bg-[#b45309] text-black font-semibold rounded-[3px] text-[11px] transition"
                 >
                   Enter Key in Settings
                 </button>
               </div>
+            </div>
+          )}
+
+          {settings.aiProvider !== 'gemini' && (
+            <div className="mx-4 mb-2 px-3 py-1.5 bg-[#122218] border border-[#1b432c] rounded-[6px] flex items-center justify-between text-xs text-[#58d68d]">
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-[#58d68d] animate-pulse" />
+                <span>
+                  <strong>Running 100% Free:</strong> Using {settings.aiProvider === 'ollama' ? 'Local Ollama' : settings.aiProvider === 'lmstudio' ? 'LM Studio' : 'OpenCode / Custom'} ({settings.ollamaModel || settings.customModel || 'gemma2:2b'}). Zero API credits needed.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => openSettingsOnTab('preferences')}
+                className="text-[11px] text-[#a3e9b9] hover:underline"
+              >
+                Change Model / Provider ⚙️
+              </button>
             </div>
           )}
 
