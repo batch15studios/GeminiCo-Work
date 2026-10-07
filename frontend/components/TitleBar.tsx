@@ -6,7 +6,8 @@ import {
   Square, 
   Copy as RestoreIcon, 
   X, 
-  FileCode2 
+  FileCode2,
+  Mic
 } from 'lucide-react';
 import { CanvasArtifact, OutputMode } from '../types';
 
@@ -16,6 +17,7 @@ interface TitleBarProps {
   isCanvasOpen: boolean;
   onToggleCanvas: () => void;
   activeArtifact?: CanvasArtifact;
+  onOpenVoice?: () => void;
 }
 
 export const TitleBar: React.FC<TitleBarProps> = ({
@@ -23,7 +25,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onOpenCommandPalette,
   isCanvasOpen,
   onToggleCanvas,
-  activeArtifact
+  activeArtifact,
+  onOpenVoice
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
 
@@ -62,6 +65,18 @@ export const TitleBar: React.FC<TitleBarProps> = ({
 
       {/* Right Window Controls: Optional Canvas Toggle & Caption Buttons (Settings removed from top bar) */}
       <div className="flex items-center h-full">
+        {/* Quick Live Voice Co-work Button */}
+        {onOpenVoice && (
+          <button
+            onClick={onOpenVoice}
+            title="Start Real-time Gemini Live Voice Session"
+            className="flex items-center space-x-1.5 text-[11px] px-2.5 py-0.5 rounded-[4px] bg-[#321e48] hover:bg-[#462865] border border-[#7b42bc]/50 text-[#e0b0ff] hover:text-white transition mr-2"
+          >
+            <Mic className="w-3 h-3 text-[#bb86fc] animate-pulse" />
+            <span>Live Voice</span>
+          </button>
+        )}
+
         {/* Canvas Split Button - ONLY rendered when canvas output mode is selected */}
         {outputMode === 'canvas' && (
           <button

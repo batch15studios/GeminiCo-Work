@@ -1,10 +1,14 @@
 export type ModelType = 
+  | 'gemini-3.8-flash'
+  | 'gemini-3.7-flash'
+  | 'gemini-3.6-flash'
+  | 'gemini-3.5-flash'
+  | 'gemini-3.1-pro-preview'
+  | 'gemini-3.1-flash-image'
   | 'gemini-2.5-pro'
   | 'gemini-2.5-flash'
   | 'gemini-2.0-flash'
-  | 'gemini-2.0-pro'
-  | 'gemini-3.1-flash-image'
-  | 'gemini-3.8-live';
+  | 'gemini-2.0-pro';
 
 export type OutputMode = 'chat' | 'canvas' | 'notebook' | 'audio' | 'image' | 'research' | 'architect';
 

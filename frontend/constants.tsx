@@ -568,7 +568,7 @@ export const INITIAL_CHAT: ChatSession = {
   id: 'session-welcome',
   title: 'Welcome to Gemini Co-work',
   gemId: 'gem-default',
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.8-flash',
   enableGrounding: true,
   defaultOutputMode: 'canvas',
   updatedAt: Date.now(),

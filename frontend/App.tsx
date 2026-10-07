@@ -32,7 +32,7 @@ import {
   DEFAULT_MCP_SERVERS,
   DEFAULT_GOOGLE_WORKSPACE_INTEGRATIONS 
 } from './constants';
-import { generateGeminiResponse } from './services/geminiService';
+import { generateGeminiResponse, setActiveApiKey } from './services/geminiService';
 import { initAuthSession, syncUserDataToCloud } from './services/firebaseService';
 import { fetchWorkspaceFiles, readWorkspaceFile } from './services/filesystemService';
 import { User } from 'firebase/auth';
@@ -166,7 +166,7 @@ export default function App() {
                 extension: item.extension,
                 size: item.size,
                 content: fileData.content,
-                isSelected: true
+                isSelected: false
               });
             } catch {}
           }
@@ -180,6 +180,17 @@ export default function App() {
         }
       }
     }).catch(() => {});
+
+    // Sync API key from backend if present
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg && cfg.apiKey) {
+          setActiveApiKey(cfg.apiKey);
+          setSettings(prev => ({ ...prev, apiKey: prev.apiKey || cfg.apiKey }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Local storage persistence
@@ -289,7 +300,7 @@ export default function App() {
       id: 'session-' + Date.now(),
       title: 'New conversation',
       gemId: activeGem.id,
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       enableGrounding: true,
       defaultOutputMode: 'canvas',
       updatedAt: Date.now(),
@@ -459,10 +470,6 @@ export default function App() {
       timestamp: Date.now(),
       outputMode: currentMode,
       attachments,
-      referencedFiles: activeProjectFiles.map(f => f.name),
-      invokedSkills: activeSkillsList.map(s => s.name),
-      invokedMcpTools: activeMcpList.flatMap(m => m.tools.map(t => `${m.name}: ${t.name}`)),
-      invokedGoogleApps: activeGoogleItems.map(g => `${g.appType.toUpperCase()}: ${g.title}`)
     };
 
     const shouldUpdateTitle = activeSession.messages.length === 0;
@@ -534,10 +541,17 @@ export default function App() {
         )
       );
     } catch (err: any) {
+      let displayError = err.message || 'Unable to generate response. Please try again.';
+      if (displayError.includes('GEMINI_KEY_REQUIRED') || displayError.includes('API Key is required') || displayError.includes('Authentication Required')) {
+        displayError = '🔑 **Gemini API Key Required**\n\nTo begin chatting with Gemini 3 models, please enter your Gemini API key in Settings (⚙️) or click the key banner above.\n\n👉 [Get a free Gemini API Key from Google AI Studio](https://aistudio.google.com/apikey)\n\n*(Click the Settings button at the bottom left to paste your key)*';
+        openSettingsOnTab('general');
+      } else if (displayError.includes('Bad Gateway') || displayError.includes('502')) {
+        displayError = '⚠️ **API Gateway Error (502)**\n\nPlease verify your Gemini API key in Settings (⚙️ > General). Note: Live Voice is accessible via the dedicated **Live Voice** button in the chat toolbar or title bar!';
+      }
       const errorMessage: Message = {
         id: 'msg-err-' + Date.now(),
         role: 'model',
-        content: `⚠️ **Error occurred:** ${err.message || 'Unable to generate response. Please try again.'}`,
+        content: displayError,
         timestamp: Date.now(),
       };
       setSessions((prev) =>
@@ -550,6 +564,18 @@ export default function App() {
     } finally {
       setIsLoading(false);
       setActiveResearchSteps(null);
+    }
+  };
+
+  const handleUpdateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    if (newSettings.apiKey) {
+      setActiveApiKey(newSettings.apiKey);
+      fetch('/api/config/key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: newSettings.apiKey })
+      }).catch(() => {});
     }
   };
 
@@ -592,6 +618,7 @@ export default function App() {
         isCanvasOpen={isCanvasOpen}
         onToggleCanvas={() => setIsCanvasOpen(!isCanvasOpen)}
         activeArtifact={activeArtifact}
+        onOpenVoice={() => setVoiceModalOpen(true)}
       />
 
       <div className="flex-1 flex overflow-hidden relative bg-[#181818]">
@@ -739,6 +766,35 @@ export default function App() {
             )}
           </div>
 
+          {/* Missing API Key Guidance Banner */}
+          {!settings.apiKey && (
+            <div className="mx-4 mb-2 p-2 bg-[#2a1c0d] border border-[#d97706]/40 rounded-[6px] flex items-center justify-between text-xs text-[#fcd34d]">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm">🔑</span>
+                <span>
+                  <strong>Gemini API Key Required:</strong> To enable Gemini 3.8 / 3.7 models, please enter your Gemini API key.
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] underline text-[#fde68a] hover:text-white"
+                >
+                  Get Free Key
+                </a>
+                <button
+                  type="button"
+                  onClick={() => openSettingsOnTab('general')}
+                  className="px-2 py-0.5 bg-[#d97706] hover:bg-[#b45309] text-black font-semibold rounded-[3px] text-[11px] transition"
+                >
+                  Enter Key in Settings
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Minimalist Communications Capsule with integrated Mode Menu */}
           <ChatInput
             onSendMessage={handleSendMessage}
@@ -785,7 +841,7 @@ export default function App() {
         initialTab={settingsModalTab}
         currentUser={currentUser}
         settings={settings}
-        onUpdateSettings={setSettings}
+        onUpdateSettings={handleUpdateSettings}
         sessions={sessions}
         gems={gems}
         activeGemId={activeSession.gemId}

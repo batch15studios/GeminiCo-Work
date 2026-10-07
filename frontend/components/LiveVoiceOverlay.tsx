@@ -54,7 +54,7 @@ export const LiveVoiceOverlay: React.FC<LiveVoiceOverlayProps> = ({
           setStatusText('Gemini is thinking...');
           try {
             const result = await generateGeminiResponse({
-              model: 'gemini-2.5-flash',
+              model: 'gemini-3.8-flash',
               prompt: transcript,
               systemInstruction: 'Respond conversationally, warmly, and concisely for spoken voice. Keep responses under 2-3 sentences.',
             });

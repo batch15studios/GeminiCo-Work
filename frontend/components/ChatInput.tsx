@@ -41,32 +41,32 @@ const OUTPUT_MODE_OPTIONS: {
     id: 'architect',
     label: 'Code Architect',
     desc: 'System architecture, project refactoring & module design',
-    model: 'gemini-2.5-pro'
+    model: 'gemini-3.8-flash'
   },
   {
     id: 'canvas',
     label: 'Canvas Co-work',
     desc: 'Live interactive workspace for code, UI & documents',
-    model: 'gemini-2.5-flash'
+    model: 'gemini-3.8-flash'
   },
   {
     id: 'research',
     label: 'Deep Research',
     desc: 'Multi-step web investigation, verification & dossier',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.7-flash',
     needsGrounding: true
   },
   {
     id: 'notebook',
     label: 'NotebookLM Guide',
     desc: 'Structured study briefs, key insights & FAQs',
-    model: 'gemini-2.5-flash'
+    model: 'gemini-3.7-flash'
   },
   {
     id: 'audio',
     label: 'Audio Podcast',
     desc: 'Two-host conversational spoken overview',
-    model: 'gemini-2.5-flash'
+    model: 'gemini-3.7-flash'
   },
   {
     id: 'image',
@@ -78,17 +78,19 @@ const OUTPUT_MODE_OPTIONS: {
     id: 'chat',
     label: 'Standard Chat',
     desc: 'Conversational chat response',
-    model: 'gemini-2.5-flash'
+    model: 'gemini-3.8-flash'
   }
 ];
 
 export const MODEL_OPTIONS: { id: ModelType; label: string; badge: string }[] = [
-  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', badge: 'Thinking & Code' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', badge: 'Fast Multimodal' },
-  { id: 'gemini-2.0-pro', label: 'Gemini 2.0 Pro', badge: 'High Context' },
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', badge: 'Ultra Low Latency' },
-  { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Image', badge: 'Image Gen' },
-  { id: 'gemini-3.8-live', label: 'Gemini 3.8 Live', badge: 'Bidirectional Voice' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', badge: 'Flagship Agent' },
+  { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', badge: 'Thinking & Code' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', badge: 'Multimodal' },
+  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', badge: 'High Throughput' },
+  { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', badge: 'Frontier Reasoning' },
+  { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Image', badge: 'Nano Banana 2' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', badge: 'Legacy Pro' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', badge: 'Legacy Flash' },
 ];
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -472,15 +474,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
           </div>
 
-          {/* Right: Live Voice + Send Button */}
-          <div className="flex items-center space-x-1.5">
+          {/* Right: Dedicated Live Voice Co-work Button + Send Button */}
+          <div className="flex items-center space-x-2">
             <button
               type="button"
               onClick={onOpenVoice}
-              title="Gemini Live Voice (Microphone)"
-              className="p-1.5 text-[#8c8c8c] hover:text-[#bb86fc] hover:bg-[#2b2b2b] rounded-[4px] transition"
+              title="Start Bidirectional Real-time Gemini Live Voice"
+              className="flex items-center space-x-1.5 px-2.5 py-1 bg-gradient-to-r from-[#38204d] to-[#1a3250] hover:from-[#4c2b69] hover:to-[#22446d] text-[#e0b0ff] hover:text-white rounded-[4px] border border-[#7b42bc]/40 transition text-xs font-medium shadow-sm group"
             >
-              <Mic className="w-3.5 h-3.5" />
+              <Mic className="w-3.5 h-3.5 text-[#bb86fc] group-hover:scale-110 transition-transform" />
+              <span>Live Voice</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#58d68d] animate-pulse" />
             </button>
 
             <button

@@ -107,30 +107,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             )}
           </div>
 
-          {/* Context Indicators: Project Files, Skills, MCP Servers */}
-          <div className="flex flex-wrap gap-1 pt-0.5">
-            {message.referencedFiles && message.referencedFiles.length > 0 && (
-              <div className="flex items-center space-x-1.5 text-[11px] text-[#8ea8be] bg-[#1a2835]/60 px-2 py-0.5 rounded-[3px] border border-[#25425a]">
-                <FolderTree className="w-3 h-3 text-[#60cdff]" />
-                <span>Files:</span>
-                <span className="font-mono text-[#60cdff]">{message.referencedFiles.join(', ')}</span>
-              </div>
-            )}
-
-            {message.invokedSkills && message.invokedSkills.length > 0 && (
-              <div className="flex items-center space-x-1 text-[11px] text-[#58d68d] bg-[#16291e] px-2 py-0.5 rounded-[3px] border border-[#276e4c]">
-                <Zap className="w-3 h-3" />
-                <span>Skills: {message.invokedSkills.join(', ')}</span>
-              </div>
-            )}
-
-            {message.invokedMcpTools && message.invokedMcpTools.length > 0 && (
-              <div className="flex items-center space-x-1 text-[11px] text-[#ffb86c] bg-[#2b2114] px-2 py-0.5 rounded-[3px] border border-[#5d411f]">
-                <Server className="w-3 h-3" />
-                <span>MCP: {message.invokedMcpTools.length} tools</span>
-              </div>
-            )}
-          </div>
 
           {/* User Attachments */}
           {message.attachments && message.attachments.length > 0 && (

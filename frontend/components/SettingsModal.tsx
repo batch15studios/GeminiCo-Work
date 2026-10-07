@@ -1413,11 +1413,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <div className="pt-2 border-t border-[#333333]">
-                  <label className="block text-[11px] font-medium text-[#60cdff] mb-1">
-                    Gemini AI Pro API Key (Optional)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-[#60cdff]">
+                      Google Gemini API Key
+                    </label>
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] text-[#60cdff] hover:underline"
+                    >
+                      Get key from Google AI Studio ↗
+                    </a>
+                  </div>
                   <p className="text-[10px] text-[#888888] mb-1.5 leading-relaxed">
-                    Leave blank to use your Google Cloud Vertex AI ADC credentials automatically. If provided, requests will route using your custom AI Pro / AI Studio subscription.
+                    Powers Gemini 3.8 Flash, 3.7 Flash, and Live Voice directly. Works with your Google account's free tier or AI Pro credits.
                   </p>
                   <input
                     type="password"

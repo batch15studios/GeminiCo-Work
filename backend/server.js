@@ -518,6 +518,49 @@ app.post('/api-proxy', async (req, res) => {
 // ==========================================
 // 1. FILE SYSTEM APIS (Real Local Disk Sync)
 // ==========================================
+// CONFIGURATION & API KEY PERSISTENCE
+// ==========================================
+app.get('/api/config', (req, res) => {
+  const key = process.env.GEMINI_API_KEY || '';
+  res.json({
+    hasApiKey: !!key,
+    apiKey: key || undefined,
+    googleCloudProject: process.env.GOOGLE_CLOUD_PROJECT || 'helpful-valve-504500-j5',
+    googleCloudLocation: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'
+  });
+});
+
+app.post('/api/config/key', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string') {
+      return res.status(400).json({ error: 'Valid apiKey string required' });
+    }
+    const cleanKey = apiKey.trim();
+    process.env.GEMINI_API_KEY = cleanKey;
+    
+    const envPath = path.resolve(__dirname, '.env.local');
+    let envContent = '';
+    try {
+      envContent = await fs.readFile(envPath, 'utf-8');
+    } catch {}
+    
+    if (envContent.includes('GEMINI_API_KEY=')) {
+      envContent = envContent.replace(/GEMINI_API_KEY=.*(\r?\n|$)/g, `GEMINI_API_KEY="${cleanKey}"$1`);
+    } else {
+      envContent += `\nGEMINI_API_KEY="${cleanKey}"\n`;
+    }
+    await fs.writeFile(envPath, envContent, 'utf-8');
+    res.json({ success: true, message: 'Gemini API key configured successfully' });
+  } catch (err) {
+    console.error('Failed to save API key:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 1. FILE SYSTEM APIS (Real Local Disk Sync)
+// ==========================================
 const WORKSPACE_ROOT = path.resolve(process.cwd(), '..');
 
 const resolveSafePath = (requestedPath) => {

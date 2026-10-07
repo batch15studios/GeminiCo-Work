@@ -15,25 +15,41 @@ import {
   GoogleWorkspaceItem
 } from '../types';
 
-export const getGenAIClient = (overrideApiKey?: string) => {
-  let key = overrideApiKey;
-  if (!key) {
-    try {
-      const stored = localStorage.getItem('gemini_cowork_settings_v1');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.apiKey && parsed.apiKey.trim()) {
-          key = parsed.apiKey.trim();
-        }
-      }
-    } catch {}
-  }
+let activeApiKey: string | null = null;
 
+export const setActiveApiKey = (k: string) => {
+  activeApiKey = k.trim();
+};
+
+export const getStoredApiKey = (): string | null => {
+  if (activeApiKey) return activeApiKey;
+  try {
+    const stored = localStorage.getItem('gemini_cowork_settings_v1');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.apiKey && parsed.apiKey.trim()) {
+        activeApiKey = parsed.apiKey.trim();
+        return activeApiKey;
+      }
+    }
+  } catch {}
+  return null;
+};
+
+export const sanitizeModel = (m: ModelType | string): string => {
+  if (!m || m === 'gemini-3.8-live') {
+    return 'gemini-3.8-flash';
+  }
+  return m;
+};
+
+export const getGenAIClient = (overrideApiKey?: string) => {
+  const key = overrideApiKey || getStoredApiKey();
   if (key && key.trim()) {
     return new GoogleGenAI({ apiKey: key.trim() });
   }
 
-  return new GoogleGenAI({ apiKey: 'api-key-this-is-not-used-can-be-ignored!', vertexai: true });
+  throw new Error("GEMINI_KEY_REQUIRED: Please enter your Gemini API Key in Settings (⚙️) or the top banner to start chatting.");
 };
 
 export interface GenerateOptions {
@@ -204,7 +220,7 @@ Cite verifiable sources directly. Be deeply factual, nuanced, and detailed.
 `;
 
       const searchResponse = await ai.models.generateContent({
-        model: (model === 'gemini-2.5-pro' || model === 'gemini-2.0-pro') ? model : 'gemini-2.5-pro',
+        model: (model === 'gemini-3.8-flash' || model === 'gemini-3.7-flash' || model === 'gemini-3.1-pro-preview') ? model : 'gemini-3.7-flash',
         contents: searchDossierPrompt,
         config: {
           tools: [{ googleSearch: {} }]
@@ -326,7 +342,7 @@ Produce a comprehensive NotebookLM research package formatted strictly as a sing
 `;
 
       const response = await ai.models.generateContent({
-        model: (model === 'gemini-3.1-flash-image') ? 'gemini-2.5-flash' : (model || 'gemini-2.5-flash'),
+        model: (model === 'gemini-3.1-flash-image') ? 'gemini-3.7-flash' : sanitizeModel(model),
         contents: notebookPrompt,
         config: {
           responseMimeType: 'application/json',
@@ -474,7 +490,7 @@ Include any brief commentary before the code.
     }
 
     const response = await ai.models.generateContent({
-      model: (model === 'gemini-3.1-flash-image') ? 'gemini-2.5-flash' : (model || 'gemini-2.5-flash'),
+      model: (model === 'gemini-3.1-flash-image') ? 'gemini-3.8-flash' : sanitizeModel(model),
       contents: {
         role: 'user',
         parts,
