@@ -15,7 +15,26 @@ import {
   GoogleWorkspaceItem
 } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
+export const getGenAIClient = (overrideApiKey?: string) => {
+  let key = overrideApiKey;
+  if (!key) {
+    try {
+      const stored = localStorage.getItem('gemini_cowork_settings_v1');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.apiKey && parsed.apiKey.trim()) {
+          key = parsed.apiKey.trim();
+        }
+      }
+    } catch {}
+  }
+
+  if (key && key.trim()) {
+    return new GoogleGenAI({ apiKey: key.trim() });
+  }
+
+  return new GoogleGenAI({ apiKey: 'api-key-this-is-not-used-can-be-ignored!', vertexai: true });
+};
 
 export interface GenerateOptions {
   model: ModelType;
@@ -60,6 +79,8 @@ export const generateGeminiResponse = async (options: GenerateOptions): Promise<
     selectedGoogleItems = [],
     onResearchProgress
   } = options;
+
+  const ai = getGenAIClient();
 
   // 1. Image Generation via gemini-3.1-flash-image
   if (model === 'gemini-3.1-flash-image' || outputMode === 'image') {
@@ -183,7 +204,7 @@ Cite verifiable sources directly. Be deeply factual, nuanced, and detailed.
 `;
 
       const searchResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: (model === 'gemini-2.5-pro' || model === 'gemini-2.0-pro') ? model : 'gemini-2.5-pro',
         contents: searchDossierPrompt,
         config: {
           tools: [{ googleSearch: {} }]
@@ -305,7 +326,7 @@ Produce a comprehensive NotebookLM research package formatted strictly as a sing
 `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: (model === 'gemini-3.1-flash-image') ? 'gemini-2.5-flash' : (model || 'gemini-2.5-flash'),
         contents: notebookPrompt,
         config: {
           responseMimeType: 'application/json',
@@ -453,7 +474,7 @@ Include any brief commentary before the code.
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: (model === 'gemini-3.1-flash-image') ? 'gemini-2.5-flash' : (model || 'gemini-2.5-flash'),
       contents: {
         role: 'user',
         parts,

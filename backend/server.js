@@ -10,9 +10,27 @@ import { GoogleAuth } from 'google-auth-library';
 import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
+import fs from 'fs/promises';
+import fsSync from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { mcpManager } from './mcpManager.js';
 
+const execAsync = promisify(exec);
 const app = express();
 app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
+
+// CORS Middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, proxy-header');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 const PORT = process?.env?.API_BACKEND_PORT || 5000;
 const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
@@ -494,6 +512,248 @@ app.post('/api-proxy', async (req, res) => {
     console.error(`[Node Proxy] Error proxying request for ${apiClient.name}`);
     console.error(error)
     res.status(500).json({ error: error });
+  }
+});
+
+// ==========================================
+// 1. FILE SYSTEM APIS (Real Local Disk Sync)
+// ==========================================
+const WORKSPACE_ROOT = path.resolve(process.cwd(), '..');
+
+const resolveSafePath = (requestedPath) => {
+  if (!requestedPath) return WORKSPACE_ROOT;
+  if (path.isAbsolute(requestedPath)) {
+    return path.normalize(requestedPath);
+  }
+  return path.normalize(path.join(WORKSPACE_ROOT, requestedPath));
+};
+
+// GET /api/fs/list?dir=...
+app.get('/api/fs/list', async (req, res) => {
+  try {
+    const targetDir = resolveSafePath(req.query.dir);
+    const entries = await fs.readdir(targetDir, { withFileTypes: true });
+    const items = await Promise.all(
+      entries
+        .filter(e => !e.name.startsWith('.git') && e.name !== 'node_modules' && e.name !== '.env.local')
+        .map(async (entry) => {
+          const fullPath = path.join(targetDir, entry.name);
+          const isDir = entry.isDirectory();
+          let size = 0;
+          if (!isDir) {
+            try {
+              const stat = await fs.stat(fullPath);
+              size = stat.size;
+            } catch (e) {}
+          }
+          return {
+            id: fullPath.replace(/\\/g, '/'),
+            name: entry.name,
+            path: fullPath.replace(/\\/g, '/'),
+            relativePath: path.relative(WORKSPACE_ROOT, fullPath).replace(/\\/g, '/'),
+            isDirectory: isDir,
+            size,
+            extension: isDir ? '' : path.extname(entry.name).slice(1).toLowerCase()
+          };
+        })
+    );
+
+    items.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json({
+      root: targetDir.replace(/\\/g, '/'),
+      workspaceRoot: WORKSPACE_ROOT.replace(/\\/g, '/'),
+      items
+    });
+  } catch (err) {
+    console.error('[FS] List error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/fs/read?path=...
+app.get('/api/fs/read', async (req, res) => {
+  try {
+    const filePath = resolveSafePath(req.query.path);
+    const content = await fs.readFile(filePath, 'utf-8');
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    res.json({
+      path: filePath.replace(/\\/g, '/'),
+      name: path.basename(filePath),
+      extension: ext,
+      content
+    });
+  } catch (err) {
+    console.error('[FS] Read error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/fs/write { path, content }
+app.post('/api/fs/write', async (req, res) => {
+  try {
+    const { path: reqPath, content } = req.body;
+    if (!reqPath) return res.status(400).json({ error: 'Missing file path' });
+    const targetPath = resolveSafePath(reqPath);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, content, 'utf-8');
+    console.log(`[FS] Saved file to disk: ${targetPath}`);
+    res.json({ success: true, path: targetPath.replace(/\\/g, '/') });
+  } catch (err) {
+    console.error('[FS] Write error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/fs/create { path, isDirectory }
+app.post('/api/fs/create', async (req, res) => {
+  try {
+    const { path: reqPath, isDirectory } = req.body;
+    const targetPath = resolveSafePath(reqPath);
+    if (isDirectory) {
+      await fs.mkdir(targetPath, { recursive: true });
+    } else {
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.writeFile(targetPath, '', 'utf-8');
+    }
+    res.json({ success: true, path: targetPath.replace(/\\/g, '/') });
+  } catch (err) {
+    console.error('[FS] Create error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/fs/delete
+app.delete('/api/fs/delete', async (req, res) => {
+  try {
+    const targetPath = resolveSafePath(req.body.path || req.query.path);
+    const stat = await fs.stat(targetPath);
+    if (stat.isDirectory()) {
+      await fs.rm(targetPath, { recursive: true, force: true });
+    } else {
+      await fs.unlink(targetPath);
+    }
+    res.json({ success: true, path: targetPath.replace(/\\/g, '/') });
+  } catch (err) {
+    console.error('[FS] Delete error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 2. REAL MCP (MODEL CONTEXT PROTOCOL) APIS
+// ==========================================
+app.get('/api/mcp/servers', (req, res) => {
+  res.json({ servers: mcpManager.getAllServers() });
+});
+
+app.post('/api/mcp/register', async (req, res) => {
+  try {
+    const summary = await mcpManager.registerServer(req.body);
+    res.json({ success: true, server: summary });
+  } catch (err) {
+    console.error('[MCP] Register error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mcp/disconnect', async (req, res) => {
+  try {
+    await mcpManager.disconnectServer(req.body.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/mcp/call', async (req, res) => {
+  try {
+    const { serverId, toolName, arguments: args } = req.body;
+    const result = await mcpManager.callTool(serverId, toolName, args);
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('[MCP] Call error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/mcp/tools', (req, res) => {
+  res.json({ tools: mcpManager.getGeminiFunctionDeclarations() });
+});
+
+// ==========================================
+// 3. GITHUB UPDATES & VERSION STATUS (v1.2.0)
+// ==========================================
+app.get('/api/updates/check', async (req, res) => {
+  const currentVersion = '1.2.0';
+  const repoOwner = 'batch15studios';
+  const repoName = 'GeminiCo-Work';
+
+  try {
+    const ghRes = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/releases/latest`, {
+      headers: {
+        'User-Agent': 'Gemini-Co-Work-Desktop-App',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (ghRes.status === 404) {
+      const commitRes = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/commits/main`, {
+        headers: { 'User-Agent': 'Gemini-Co-Work-Desktop-App' }
+      });
+      if (commitRes.ok) {
+        const commitData = await commitRes.json();
+        return res.json({
+          currentVersion,
+          latestVersion: currentVersion,
+          latestCommit: commitData.sha.substring(0, 7),
+          commitMessage: commitData.commit.message,
+          commitDate: commitData.commit.author.date,
+          updateAvailable: false,
+          notes: 'Repository is tracking main branch.'
+        });
+      }
+    }
+
+    if (ghRes.ok) {
+      const release = await ghRes.json();
+      const latestTag = (release.tag_name || '').replace(/^v/, '');
+      const updateAvailable = Boolean(latestTag && latestTag !== currentVersion);
+      return res.json({
+        currentVersion,
+        latestVersion: release.tag_name,
+        updateAvailable,
+        name: release.name,
+        notes: release.body,
+        publishedAt: release.published_at,
+        htmlUrl: release.html_url,
+        downloadUrl: release.assets?.[0]?.browser_download_url || release.zipball_url
+      });
+    }
+
+    res.json({
+      currentVersion,
+      latestVersion: currentVersion,
+      updateAvailable: false,
+      notes: 'Up to date'
+    });
+  } catch (err) {
+    console.error('[Updates] Check error:', err);
+    res.status(500).json({ error: err.message, currentVersion });
+  }
+});
+
+app.post('/api/updates/pull', async (req, res) => {
+  try {
+    const { stdout, stderr } = await execAsync('git pull origin main', { cwd: WORKSPACE_ROOT });
+    res.json({ success: true, stdout, stderr });
+  } catch (err) {
+    console.error('[Updates] Pull error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -11,15 +11,16 @@ export default defineConfig(({ mode }) => {
       },
       server: {
         proxy: {
-          //Target your Node.js backend
+          // Target Node.js backend
+          '/api': 'http://localhost:5000',
           '/api-proxy': 'http://localhost:5000',
-          '/ws-proxy': {target: 'ws://localhost:5000', ws: true},
+          '/ws-proxy': { target: 'ws://localhost:5000', ws: true },
         },
       },
       plugins: react(),
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
+          '@': path.resolve(process.cwd(), '.'),
         }
       }
     };

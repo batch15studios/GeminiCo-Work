@@ -30,6 +30,7 @@ import {
   Shield,
   Globe,
   Lock,
+  Download,
   ExternalLink
 } from 'lucide-react';
 import { User } from 'firebase/auth';
@@ -42,17 +43,20 @@ import {
   Skill, 
   MCPServer, 
   MCPAuthType,
-  OAuthConfig 
+  OAuthConfig,
+  UpdateInfo 
 } from '../types';
 import { 
   loginWithEmail, 
   registerWithEmail, 
+  loginWithGoogle,
   logoutUser, 
   syncUserDataToCloud, 
   fetchUserDataFromCloud 
 } from '../services/firebaseService';
+import { checkForUpdates, pullLatestUpdate } from '../services/updateService';
 
-export type SettingsTab = 'google' | 'gems' | 'skills' | 'mcp' | 'account' | 'sync' | 'preferences';
+export type SettingsTab = 'google' | 'gems' | 'skills' | 'mcp' | 'account' | 'sync' | 'preferences' | 'updates';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -154,6 +158,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [customHeaderVal, setCustomHeaderVal] = useState('');
 
   const [testingId, setTestingId] = useState<string | null>(null);
+
+  // GitHub Updates state
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isPullingUpdate, setIsPullingUpdate] = useState(false);
+
+  const handleCheckUpdates = async () => {
+    setIsCheckingUpdate(true);
+    setStatusMessage(null);
+    try {
+      const info = await checkForUpdates();
+      setUpdateInfo(info);
+      if (info.updateAvailable) {
+        setStatusMessage({ type: 'info', text: `New update available: ${info.latestVersion}! Release: ${info.name || ''}` });
+      } else {
+        setStatusMessage({ type: 'success', text: `You are on the latest version of Gemini Co-work (v${info.currentVersion}).` });
+      }
+    } catch (e: any) {
+      setStatusMessage({ type: 'error', text: `Update check failed: ${e.message}` });
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handlePullUpdate = async () => {
+    setIsPullingUpdate(true);
+    try {
+      const res = await pullLatestUpdate();
+      if (res.success) {
+        setStatusMessage({ type: 'success', text: 'Successfully pulled latest changes from GitHub! Restart the application to apply.' });
+      }
+    } catch (e: any) {
+      setStatusMessage({ type: 'error', text: `Failed to pull update: ${e.message}` });
+    } finally {
+      setIsPullingUpdate(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setStatusMessage({ type: 'info', text: 'Signing in with Google...' });
+    try {
+      await loginWithGoogle();
+      setStatusMessage({ type: 'success', text: 'Successfully signed in with Google Account! AI Pro credits and Cloud identity active.' });
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err.message || 'Google sign-in failed.' });
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -528,6 +579,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <Sliders className="w-4 h-4 text-[#a0a0a0]" />
                 <span>Preferences</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('updates')}
+                className={`w-full flex items-center space-x-2 px-2.5 py-2 rounded-[4px] text-xs transition text-left ${
+                  activeTab === 'updates'
+                    ? 'bg-[#292929] text-white font-medium border-l-2 border-l-[#60cdff]'
+                    : 'text-[#999999] hover:bg-[#222222] hover:text-white'
+                }`}
+              >
+                <RefreshCw className="w-4 h-4 text-[#58d68d]" />
+                <span>Updates (v1.2)</span>
               </button>
             </div>
 
@@ -1227,6 +1290,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <h3 className="text-xs font-semibold text-white">
                       {isRegisterMode ? 'Create Account & Sync Settings' : 'Sign in to Migrate Your Settings'}
                     </h3>
+
+                    {/* Google Account Sign-In (AI Pro Credits & Cloud Auth) */}
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      className="w-full py-2 px-3 bg-white hover:bg-neutral-100 text-neutral-900 rounded-[4px] text-xs font-medium flex items-center justify-center space-x-2 transition shadow-sm"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                      </svg>
+                      <span>Sign in with Google (AI Pro / Cloud Credits)</span>
+                    </button>
+
+                    <div className="flex items-center space-x-2 my-2">
+                      <div className="flex-1 h-[1px] bg-[#333333]" />
+                      <span className="text-[10px] text-[#777777]">OR WITH EMAIL</span>
+                      <div className="flex-1 h-[1px] bg-[#333333]" />
+                    </div>
+
                     <form onSubmit={handleEmailAuth} className="space-y-2.5">
                       {isRegisterMode && (
                         <input
@@ -1314,8 +1399,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* TAB: PREFERENCES */}
             {activeTab === 'preferences' && (
-              <div className="p-4 bg-[#262626] border border-[#333333] rounded-[6px] space-y-3">
-                <h3 className="text-xs font-semibold text-white">General Preferences</h3>
+              <div className="p-4 bg-[#262626] border border-[#333333] rounded-[6px] space-y-4">
+                <h3 className="text-xs font-semibold text-white">General & AI Engine Preferences</h3>
+                
                 <div>
                   <label className="block text-[11px] text-[#aaaaaa] mb-1">User Display Name</label>
                   <input
@@ -1324,6 +1410,152 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={(e) => onUpdateSettings({ ...settings, userName: e.target.value })}
                     className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white focus:outline-none"
                   />
+                </div>
+
+                <div className="pt-2 border-t border-[#333333]">
+                  <label className="block text-[11px] font-medium text-[#60cdff] mb-1">
+                    Gemini AI Pro API Key (Optional)
+                  </label>
+                  <p className="text-[10px] text-[#888888] mb-1.5 leading-relaxed">
+                    Leave blank to use your Google Cloud Vertex AI ADC credentials automatically. If provided, requests will route using your custom AI Pro / AI Studio subscription.
+                  </p>
+                  <input
+                    type="password"
+                    value={settings.apiKey || ''}
+                    onChange={(e) => onUpdateSettings({ ...settings, apiKey: e.target.value })}
+                    placeholder="AIzaSy..."
+                    className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-[#60cdff]"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-[#333333]">
+                  <label className="block text-[11px] font-medium text-[#cccccc] mb-1">
+                    Google Cloud Project ID
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.googleCloudProject || 'helpful-valve-504500-j5'}
+                    onChange={(e) => onUpdateSettings({ ...settings, googleCloudProject: e.target.value })}
+                    placeholder="your-project-id"
+                    className="w-full bg-[#1c1c1c] border border-[#383838] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-[#333333] flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-white block">Auto Grounding with Google Search</span>
+                    <span className="text-[10px] text-[#888888]">Enable web citations by default on research queries</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSettings({ ...settings, autoGrounding: !settings.autoGrounding })}
+                    className={`w-9 h-4.5 rounded-full transition-colors relative ${
+                      settings.autoGrounding ? 'bg-[#0078d4]' : 'bg-[#444444]'
+                    }`}
+                  >
+                    <span className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${
+                      settings.autoGrounding ? 'left-4.5' : 'left-0.5'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: UPDATES & RELEASES (v1.2.0) */}
+            {activeTab === 'updates' && (
+              <div className="space-y-4">
+                <div className="p-4 bg-[#232323] border border-[#333333] rounded-[6px] space-y-3">
+                  <div className="flex items-center space-x-3 pb-3 border-b border-[#303030]">
+                    <img src="/app-icon.png" alt="App Icon" className="w-10 h-10 rounded-[6px] object-contain shadow-md" />
+                    <div>
+                      <h3 className="text-xs font-semibold text-white flex items-center space-x-2">
+                        <span>Gemini Co-work Desktop</span>
+                        <span className="px-1.5 py-0.2 bg-[#1b3449] text-[#60cdff] text-[10px] font-mono rounded border border-[#275374]">
+                          v1.2.0
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-[#8c8c8c] mt-0.5">
+                        Native AI co-working workstation with File Explorer context, Canvas, and Deep Research.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div>
+                      <div className="text-xs text-white font-medium">GitHub Repository Sync</div>
+                      <p className="text-[10px] text-[#888888]">
+                        Tracks repository: <a href="https://github.com/batch15studios/GeminiCo-Work" target="_blank" rel="noreferrer" className="text-[#60cdff] hover:underline">batch15studios/GeminiCo-Work</a>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleCheckUpdates}
+                        disabled={isCheckingUpdate}
+                        className="px-3 py-1.5 bg-[#2a2a2a] hover:bg-[#333333] border border-[#3c3c3c] text-white rounded-[4px] text-xs font-medium transition flex items-center space-x-1.5"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin text-[#60cdff]' : ''}`} />
+                        <span>{isCheckingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+                      </button>
+
+                      <button
+                        onClick={handlePullUpdate}
+                        disabled={isPullingUpdate}
+                        className="px-3 py-1.5 bg-[#1b5e3f] hover:bg-[#237750] border border-[#2c885c] text-white rounded-[4px] text-xs font-medium transition flex items-center space-x-1.5"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>{isPullingUpdate ? 'Pulling...' : 'Pull Update (Git)'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {updateInfo && (
+                    <div className="p-3 bg-[#191919] border border-[#2e2e2e] rounded-[5px] space-y-2 mt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white">
+                          Latest Release: {updateInfo.latestVersion || updateInfo.latestCommit}
+                        </span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+                          updateInfo.updateAvailable ? 'bg-[#5c2a1e] text-[#ff8c69]' : 'bg-[#183925] text-[#58d68d]'
+                        }`}>
+                          {updateInfo.updateAvailable ? 'Update Waiting' : 'Up to Date'}
+                        </span>
+                      </div>
+
+                      {updateInfo.name && (
+                        <div className="text-xs text-[#60cdff] font-medium">{updateInfo.name}</div>
+                      )}
+
+                      {updateInfo.notes && (
+                        <div className="text-[11px] text-[#aaaaaa] bg-[#141414] p-2 rounded border border-[#282828] font-mono whitespace-pre-wrap max-h-36 overflow-y-auto">
+                          {updateInfo.notes}
+                        </div>
+                      )}
+
+                      {updateInfo.downloadUrl && (
+                        <a
+                          href={updateInfo.downloadUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center space-x-1.5 text-xs text-[#60cdff] hover:underline pt-1"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Download Release Package</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Package Installer Information Box */}
+                <div className="p-4 bg-[#19232c] border border-[#234259] rounded-[6px] flex items-start space-x-3">
+                  <img src="/installer-icon.png" alt="Package Installer" className="w-12 h-12 rounded-[6px] object-contain flex-shrink-0" />
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-semibold text-[#60cdff]">Windows Installer Packaging (v1.2.0)</h4>
+                    <p className="text-[11px] text-[#a0c2db] leading-relaxed">
+                      You can compile a standalone Windows Setup installer (<code className="font-mono text-white">GeminiCoWork-Setup-v1.2.0.exe</code>) using Inno Setup or run the automated script <code className="font-mono text-white">package-installer.ps1</code> in the workspace root.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

@@ -40,7 +40,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
     <div className="h-9 bg-[#202020] border-b border-[#303030] flex items-center justify-between select-none flex-shrink-0 z-30 pl-3">
       {/* Native Windows 11 App Title */}
       <div className="flex items-center space-x-2 min-w-[160px]">
-        <FileCode2 className="w-4 h-4 text-[#60cdff]" />
+        <img src="/app-icon.png" alt="Gemini Co-work" className="w-4 h-4 rounded-[3px] object-contain" />
         <span className="font-semibold text-white text-xs tracking-normal">Gemini Co-work</span>
       </div>
 

@@ -17,10 +17,13 @@ import {
   ChevronDown, 
   ChevronRight, 
   ExternalLink, 
-  Settings as SettingsIcon 
+  Settings as SettingsIcon,
+  RefreshCw,
+  HardDrive
 } from 'lucide-react';
 import { ChatSession, Gem, WorkspaceFile } from '../types';
 import { User } from 'firebase/auth';
+import { fetchWorkspaceFiles, readWorkspaceFile, openLocalFolderWithPicker } from '../services/filesystemService';
 
 interface SidebarProps {
   sessions: ChatSession[];
@@ -63,8 +66,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'src/components': true
   });
   const fileUploadInputRef = useRef<HTMLInputElement>(null);
+  const [isSyncingDisk, setIsSyncingDisk] = useState(false);
 
   const selectedCount = workspaceFiles.filter(f => f.isSelected).length;
+
+  const handleSyncLocalDisk = async () => {
+    setIsSyncingDisk(true);
+    try {
+      const res = await fetchWorkspaceFiles();
+      const diskFiles: WorkspaceFile[] = [];
+      for (const item of res.items) {
+        if (!item.isDirectory) {
+          try {
+            const fileData = await readWorkspaceFile(item.path);
+            diskFiles.push({
+              id: 'fs-' + item.relativePath.replace(/[^a-zA-Z0-9_-]/g, '_'),
+              name: item.name,
+              path: item.relativePath,
+              extension: item.extension,
+              size: item.size,
+              content: fileData.content,
+              isSelected: true
+            });
+          } catch (e) {
+            console.warn('Could not read file:', item.path);
+          }
+        }
+      }
+      if (diskFiles.length > 0) {
+        onImportFiles(diskFiles);
+      }
+    } catch (err) {
+      console.warn('Could not sync local disk:', err);
+    } finally {
+      setIsSyncingDisk(false);
+    }
+  };
+
+  const handlePickFolder = async () => {
+    try {
+      const picked = await openLocalFolderWithPicker();
+      if (picked.length > 0) {
+        onImportFiles(picked);
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.warn(e);
+    }
+  };
 
   const toggleFolder = (folderPath: string) => {
     setExpandedFolders(prev => ({
@@ -264,6 +312,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
 
             <div className="flex items-center space-x-1">
+              <button
+                onClick={handleSyncLocalDisk}
+                disabled={isSyncingDisk}
+                title="Sync from real local disk (/api/fs)"
+                className="p-1 hover:text-white hover:bg-[#282828] rounded-[3px] transition flex items-center space-x-1 text-[11px] text-[#60cdff]"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncingDisk ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Sync</span>
+              </button>
+
+              <button
+                onClick={handlePickFolder}
+                title="Open local folder from computer..."
+                className="p-1 hover:text-white hover:bg-[#282828] rounded-[3px] transition flex items-center space-x-1 text-[11px] text-[#ffb86c]"
+              >
+                <FolderOpen className="w-3 h-3" />
+              </button>
+
               <input
                 type="file"
                 ref={fileUploadInputRef}
@@ -276,8 +342,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 title="Add local files to project"
                 className="p-1 hover:text-white hover:bg-[#282828] rounded-[3px] transition flex items-center space-x-1 text-[11px]"
               >
-                <Upload className="w-3 h-3 text-[#60cdff]" />
-                <span>Add</span>
+                <Upload className="w-3 h-3 text-[#aaaaaa]" />
               </button>
 
               <button

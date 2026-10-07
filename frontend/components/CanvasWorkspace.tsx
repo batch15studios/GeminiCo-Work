@@ -23,9 +23,11 @@ import {
   ShieldCheck,
   Search,
   Terminal,
-  FolderOpen
+  FolderOpen,
+  HardDrive
 } from 'lucide-react';
 import { CanvasArtifact } from '../types';
+import { saveWorkspaceFile } from '../services/filesystemService';
 
 interface CanvasWorkspaceProps {
   artifact: CanvasArtifact;
@@ -58,9 +60,40 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(0);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
 
+  const [isSavingToDisk, setIsSavingToDisk] = useState(false);
+  const [diskSaveMsg, setDiskSaveMsg] = useState<string | null>(null);
+
   useEffect(() => {
     setCodeContent(artifact.content);
   }, [artifact.content, artifact.currentVersion]);
+
+  const handleSaveToDisk = async () => {
+    setIsSavingToDisk(true);
+    try {
+      const ext = artifact.type === 'html' ? 'html' : artifact.type === 'react' ? 'tsx' : artifact.language || 'md';
+      const cleanTitle = (artifact.title || 'artifact').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+      const filePath = `saved_artifacts/${cleanTitle}.${ext}`;
+      await saveWorkspaceFile(filePath, codeContent);
+      setDiskSaveMsg(`Saved to disk: ${filePath}`);
+      setTimeout(() => setDiskSaveMsg(null), 3000);
+    } catch (err: any) {
+      setDiskSaveMsg(`Save failed: ${err.message}`);
+      setTimeout(() => setDiskSaveMsg(null), 4000);
+    } finally {
+      setIsSavingToDisk(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveToDisk();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [codeContent, artifact]);
 
   const handleContentChange = (newVal: string) => {
     setCodeContent(newVal);
@@ -292,8 +325,17 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
           </button>
 
           <button
+            onClick={handleSaveToDisk}
+            disabled={isSavingToDisk}
+            title="Save to local disk (Ctrl+S)"
+            className="p-1 text-[#60cdff] hover:text-white hover:bg-[#2c2c2c] rounded-[3px] transition"
+          >
+            <HardDrive className={`w-3.5 h-3.5 ${isSavingToDisk ? 'animate-pulse' : ''}`} />
+          </button>
+
+          <button
             onClick={handleDownload}
-            title="Save file"
+            title="Download file to computer"
             className="p-1 text-[#8c8c8c] hover:text-white hover:bg-[#2c2c2c] rounded-[3px] transition"
           >
             <Download className="w-3.5 h-3.5" />
@@ -319,6 +361,12 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
 
       {/* Main Document Body */}
       <div className="flex-1 overflow-hidden relative flex flex-col bg-[#1c1c1c]">
+        {diskSaveMsg && (
+          <div className="absolute top-2 right-4 z-50 bg-[#163824] border border-[#276e4c] text-[#58d68d] text-xs px-3 py-1.5 rounded-[4px] shadow-lg animate-fade-in font-medium flex items-center space-x-1.5">
+            <HardDrive className="w-3.5 h-3.5" />
+            <span>{diskSaveMsg}</span>
+          </div>
+        )}
         {/* TAB 0: DEEP RESEARCH DOSSIER */}
         {activeTab === 'research' && artifact.researchData && (
           <div className="w-full h-full overflow-y-auto p-5 space-y-4 bg-[#1a1a1a] text-[#dddddd] select-text">

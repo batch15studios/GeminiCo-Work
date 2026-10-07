@@ -20,6 +20,7 @@ import {
   Shield
 } from 'lucide-react';
 import { Skill, MCPServer, MCPAuthType, OAuthConfig } from '../types';
+import { fetchMcpServers, registerMcpServer, disconnectMcpServer, callMcpTool } from '../services/mcpService';
 
 interface SkillsMcpModalProps {
   isOpen: boolean;
@@ -148,11 +149,32 @@ export const SkillsMcpModal: React.FC<SkillsMcpModalProps> = ({
     const cleanName = newMcpName.trim();
     const cleanPrefix = cleanName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
+    // Register with backend MCP manager
+    try {
+      if (newMcpEndpoint.startsWith('http')) {
+        await registerMcpServer({
+          name: cleanName,
+          transport: 'http',
+          url: newMcpEndpoint.trim()
+        });
+      } else {
+        const parts = newMcpEndpoint.trim().split(' ');
+        await registerMcpServer({
+          name: cleanName,
+          transport: 'stdio',
+          command: parts[0],
+          args: parts.slice(1)
+        });
+      }
+    } catch (e) {
+      console.warn('Backend MCP registration note:', e);
+    }
+
     const newServer: MCPServer = {
       id: 'mcp-custom-' + Date.now(),
       name: cleanName,
       endpointUrl: newMcpEndpoint.trim(),
-      transport: 'https',
+      transport: newMcpEndpoint.startsWith('http') ? 'https' : 'stdio',
       authType: newMcpAuthType,
       authToken,
       apiKeyHeader: apiKeyHdr,

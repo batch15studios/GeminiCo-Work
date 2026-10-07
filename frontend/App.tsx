@@ -34,6 +34,7 @@ import {
 } from './constants';
 import { generateGeminiResponse } from './services/geminiService';
 import { initAuthSession, syncUserDataToCloud } from './services/firebaseService';
+import { fetchWorkspaceFiles, readWorkspaceFile } from './services/filesystemService';
 import { User } from 'firebase/auth';
 import { ArrowRight, LayoutTemplate, BookOpen, Headphones, Microscope, FileCode2 } from 'lucide-react';
 
@@ -147,6 +148,38 @@ export default function App() {
       setCurrentUser(user);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Auto-sync initial workspace files from local disk
+  useEffect(() => {
+    fetchWorkspaceFiles().then(async (res) => {
+      if (res && res.items && res.items.length > 0) {
+        const diskFiles: WorkspaceFile[] = [];
+        for (const item of res.items.slice(0, 20)) {
+          if (!item.isDirectory) {
+            try {
+              const fileData = await readWorkspaceFile(item.path);
+              diskFiles.push({
+                id: 'fs-' + item.relativePath.replace(/[^a-zA-Z0-9_-]/g, '_'),
+                name: item.name,
+                path: item.relativePath,
+                extension: item.extension,
+                size: item.size,
+                content: fileData.content,
+                isSelected: true
+              });
+            } catch {}
+          }
+        }
+        if (diskFiles.length > 0) {
+          setWorkspaceFiles(prev => {
+            const map = new Map(prev.map(f => [f.path, f]));
+            diskFiles.forEach(df => map.set(df.path, df));
+            return Array.from(map.values());
+          });
+        }
+      }
+    }).catch(() => {});
   }, []);
 
   // Local storage persistence
@@ -341,18 +374,28 @@ export default function App() {
     );
   };
 
-  const handleOpenFileInCanvas = (file: WorkspaceFile) => {
+  const handleOpenFileInCanvas = async (file: WorkspaceFile) => {
+    let content = file.content;
+    if (!content && file.path) {
+      try {
+        const disk = await readWorkspaceFile(file.path);
+        content = disk.content;
+      } catch (e) {
+        console.warn('Could not read file from disk:', e);
+      }
+    }
+
     const newArtifact: CanvasArtifact = {
       id: 'file-artifact-' + file.id,
       title: file.name,
       type: file.extension === 'html' ? 'html' : file.extension === 'tsx' || file.extension === 'jsx' ? 'react' : 'code',
       language: file.extension,
-      content: file.content,
+      content: content || '',
       currentVersion: 1,
       versions: [{
         version: 1,
         timestamp: Date.now(),
-        content: file.content,
+        content: content || '',
         description: `Opened from ${file.path}`
       }]
     };

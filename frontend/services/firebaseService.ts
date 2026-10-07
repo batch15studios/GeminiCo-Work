@@ -12,6 +12,8 @@ import {
   signInAnonymously, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
   updateProfile,
   signOut as fbSignOut,
   User 
@@ -48,6 +50,14 @@ export const initAuthSession = (onUserChange: (user: User | null) => void) => {
       onUserChange(user);
     }
   });
+};
+
+/**
+ * Sign in with Google Account (uses Google AI / Cloud identity)
+ */
+export const loginWithGoogle = async () => {
+  const provider = new GoogleAuthProvider();
+  return await signInWithPopup(auth, provider);
 };
 
 /**

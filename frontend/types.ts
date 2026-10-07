@@ -1,4 +1,10 @@
-export type ModelType = 'gemini-2.5-flash' | 'gemini-3.1-flash-image';
+export type ModelType = 
+  | 'gemini-2.5-pro'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.0-flash'
+  | 'gemini-2.0-pro'
+  | 'gemini-3.1-flash-image'
+  | 'gemini-3.8-live';
 
 export type OutputMode = 'chat' | 'canvas' | 'notebook' | 'audio' | 'image' | 'research' | 'architect';
 
@@ -210,4 +216,20 @@ export interface AppSettings {
   soundEffects: boolean;
   autoCloudSync: boolean;
   lastSyncedTimestamp?: number;
+  apiKey?: string;
+  googleCloudProject?: string;
+  useLocalFileSystem?: boolean;
+}
+
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  name?: string;
+  notes?: string;
+  publishedAt?: string;
+  htmlUrl?: string;
+  downloadUrl?: string;
+  latestCommit?: string;
+  commitMessage?: string;
 }

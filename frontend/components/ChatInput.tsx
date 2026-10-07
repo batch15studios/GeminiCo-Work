@@ -41,7 +41,7 @@ const OUTPUT_MODE_OPTIONS: {
     id: 'architect',
     label: 'Code Architect',
     desc: 'System architecture, project refactoring & module design',
-    model: 'gemini-2.5-flash'
+    model: 'gemini-2.5-pro'
   },
   {
     id: 'canvas',
@@ -53,7 +53,7 @@ const OUTPUT_MODE_OPTIONS: {
     id: 'research',
     label: 'Deep Research',
     desc: 'Multi-step web investigation, verification & dossier',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-pro',
     needsGrounding: true
   },
   {
@@ -82,6 +82,15 @@ const OUTPUT_MODE_OPTIONS: {
   }
 ];
 
+export const MODEL_OPTIONS: { id: ModelType; label: string; badge: string }[] = [
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', badge: 'Thinking & Code' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', badge: 'Fast Multimodal' },
+  { id: 'gemini-2.0-pro', label: 'Gemini 2.0 Pro', badge: 'High Context' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', badge: 'Ultra Low Latency' },
+  { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Image', badge: 'Image Gen' },
+  { id: 'gemini-3.8-live', label: 'Gemini 3.8 Live', badge: 'Bidirectional Voice' },
+];
+
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
@@ -96,14 +105,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
         setIsModeMenuOpen(false);
+      }
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setIsModelMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -356,6 +370,52 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                               {opt.desc}
                             </p>
                           </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Model Selector Dropdown */}
+            <div className="relative" ref={modelMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                className="flex items-center space-x-1.5 px-2 py-1 bg-[#282828] hover:bg-[#303030] border border-[#3c3c3c] rounded-[4px] text-xs text-[#d0d0d0] hover:text-white transition"
+              >
+                <span className="font-medium text-[11px] truncate max-w-[110px]">
+                  {MODEL_OPTIONS.find(m => m.id === model)?.label || model}
+                </span>
+                <ChevronDown className="w-3 h-3 text-[#888888]" />
+              </button>
+
+              {isModelMenuOpen && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#232323] border border-[#3c3c3c] rounded-[6px] shadow-2xl p-1.5 z-50">
+                  <div className="px-2 py-1 text-[10px] font-semibold text-[#808080] uppercase tracking-wider">
+                    Select Gemini Model
+                  </div>
+                  <div className="space-y-1">
+                    {MODEL_OPTIONS.map((opt) => {
+                      const isSelected = model === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setModel(opt.id);
+                            setIsModelMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-[4px] text-left transition ${
+                            isSelected ? 'bg-[#1b3449] text-[#60cdff]' : 'hover:bg-[#2d2d2d] text-[#cccccc] hover:text-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-medium">{opt.label}</div>
+                            <span className="text-[10px] text-[#808080] font-mono">{opt.badge}</span>
+                          </div>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-[#60cdff]" />}
                         </button>
                       );
                     })}

@@ -1,5 +1,6 @@
 {
   "name": "Gemini Co-work",
+  "version": "1.2.0",
   "description": "A Windows-styled AI co-working workstation with File Explorer project context, interactive Canvas, Deep Research, and NotebookLM study tools.",
   "requestFramePermissions": [
     "microphone"
