@@ -1,0 +1,11 @@
+{
+  "webAppConfig": {
+    "projectId": "helpful-valve-504500-j5",
+    "appId": "1:82440104132:web:8adf1d7c429b6cfe1f8191",
+    "apiKey": "AIzaSyAgDtBvVDdd6G0Bo7DSR2BXhtwtax-SMXw",
+    "authDomain": "helpful-valve-504500-j5.firebaseapp.com",
+    "storageBucket": "helpful-valve-504500-j5.firebasestorage.app",
+    "messagingSenderId": "82440104132"
+  },
+  "databaseId": "app-builder-3a00504d"
+}
