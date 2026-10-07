@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, X, Volume2, Sparkles, MessageSquare } from 'lucide-react';
 import { generateGeminiResponse } from '../services/geminiService';
 

@@ -31,8 +31,8 @@ if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
 echo [2/4] Starting Gemini Co-Work backend & frontend services...
 start "Gemini Co-Work Server" /min cmd /c "npm run dev"
 
-echo [3/4] Launching Gemini Co-Work Desktop Application...
-timeout /t 3 /nobreak >nul
+echo [3/4] Waiting for frontend workstation to be ready...
+powershell -Command "for ($i=0; $i -lt 40; $i++) { try { $r = [System.Net.WebRequest]::Create('http://localhost:5173'); $res = $r.GetResponse(); if ($res.StatusCode -eq 200) { exit 0 } } catch {} Start-Sleep -Milliseconds 500 }; exit 0" >nul 2>nul
 
 :: Launch in native desktop app window mode using Edge or Chrome if available
 if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" (
