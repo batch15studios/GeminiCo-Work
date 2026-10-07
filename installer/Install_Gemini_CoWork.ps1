@@ -65,7 +65,10 @@ $DesktopPaths = @(
     "$env:USERPROFILE\OneDrive\Desktop"
 )
 
-$IconPath = Join-Path $TargetDir "resources\app-icon.ico"
+$IconPath = Join-Path $TargetDir "resources\app-icon-clean.ico"
+if (!(Test-Path $IconPath)) {
+    $IconPath = Join-Path $TargetDir "resources\app-icon.ico"
+}
 $TargetExe = Join-Path $TargetDir "Launch_Gemini_CoWork.bat"
 
 foreach ($dPath in $DesktopPaths) {
