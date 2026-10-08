@@ -1,8 +1,8 @@
-; Inno Setup Script for Gemini Co-Work v1.2.0
+; Inno Setup Script for Gemini Co-Work v1.5.0
 ; Designed for Windows 10/11 x64
 
 #define MyAppName "Gemini Co-Work"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.5.0"
 #define MyAppPublisher "Batch15 Studios"
 #define MyAppURL "https://github.com/batch15studios/GeminiCo-Work"
 #define MyAppExeName "Launch_Gemini_CoWork.bat"
@@ -38,9 +38,9 @@ Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescrip
 [Files]
 Source: "..\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\package.json"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\package-lock.json"; DestDir: "{app}"; Flags: ignoreversion; Flags: skipifsourcedoesntexist
+Source: "..\package-lock.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\resources\*"; DestDir: "{app}\resources"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*"
+Source: "..\backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\frontend\*"; DestDir: "{app}\frontend"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules\*"
 
 [Icons]

@@ -903,10 +903,10 @@ app.get('/api/mcp/tools', (req, res) => {
 });
 
 // ==========================================
-// 3. GITHUB UPDATES & VERSION STATUS (v1.2.0)
+// 3. GITHUB UPDATES & VERSION STATUS (v1.5.0)
 // ==========================================
 app.get('/api/updates/check', async (req, res) => {
-  const currentVersion = '1.2.0';
+  const currentVersion = '1.5.0';
   const repoOwner = 'batch15studios';
   const repoName = 'GeminiCo-Work';
 
@@ -973,6 +973,19 @@ app.post('/api/updates/pull', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Serve Frontend Production Build if present (Unified Single-Port Serving)
+const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
+if (fsSync.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/ws-proxy')) {
+      return res.sendFile(path.join(frontendDistPath, 'index.html'));
+    }
+    next();
+  });
+  console.log(`[Static Serving] Serving production frontend from ${frontendDistPath}`);
+}
 
 const server = app.listen(PORT, API_BACKEND_HOST, () => {
   console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);

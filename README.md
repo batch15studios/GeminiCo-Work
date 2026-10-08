@@ -1,53 +1,46 @@
-# Vertex AI Studio Frontend App with Node.js Backend
+# Gemini Co-Work v1.5.0 - Desktop AI Workstation
 
-This repository contains a frontend and a Node.js backend, designed to run together.
-The backend acts as a proxy, handling Google Cloud API calls.
+A native desktop pair-programming and co-working workstation inspired by Claude Co-work, GPT Desktop, and Google Antigravity. Built for rapid iterative development, multi-file code editing, deep empirical research, and live Google Workspace integration.
 
-This project is intended for demonstration and prototyping purposes only.
-It is not intended for use in a production environment.
+## ✨ Highlights & Architecture (v1.5.0)
 
-## Prerequisites
+- **Frontier Multi-Provider AI**:
+  - **Google Gemini**: Gemini 3.8 Flash, 3.7 Flash Thinking, Gemini Live Voice, and Imagen 3.1.
+  - **xAI Grok**: Grok 2 & Grok 2 Vision integration via official xAI API.
+  - **Groq Cloud**: 500+ tok/s inference with Llama 3.3 70B, Qwen 2.5 Coder, and GPT-OSS.
+  - **Local Offline AI**: Ollama and LM Studio (Port 11434 / 1234) with GPU acceleration and 0 API credits required.
+- **Interactive Canvas & Code Studio**:
+  - Live preview for React, HTML, Markdown, and code artifacts.
+  - Iterative version history and direct disk sync.
+- **Live Google Workspace OAuth Ecosystem**:
+  - Direct read integration for Google Drive, Gmail, Google Calendar, and Google Docs.
+  - User-driven Google OAuth authorization with automatic prompt context injection.
+- **Deep Research Engine**:
+  - Multi-step inquiry decomposition, web search grounding, and comprehensive dossier synthesis.
+- **Unified Single-Port Express Server**:
+  - High-performance production serving on `http://localhost:5000` with sub-second boot times.
 
-To run this application locally, you need:
+## 🚀 Quick Launch
 
-*   **[Google Cloud SDK / gcloud CLI](https://cloud.google.com/sdk/docs/install)**: Follow the instructions to install the SDK.
+### 1. Launch with One Click
+Double-click `Launch_Gemini_CoWork.bat` in the root folder.
+The launcher automatically initializes the background server, launches Ollama GPU acceleration if installed, and opens the application in a native borderless desktop window.
 
-*   **gcloud Initialization**:
-    *   Initialize the gcloud CLI:
-        ```bash
-        gcloud init
-        ```
-    *   Authenticate for Application Default Credentials (needed to call Google Cloud APIs):
-        ```bash
-        gcloud auth application-default login
-        ```
-
-*   **Node.js and npm**: Ensure you have Node.js and its package manager, `npm`, installed on your machine.
-
-## Project Structure
-
-The project is organized into two main directories:
-
-*   `frontend/`: Contains the Frontend application code.
-*   `backend/`: Contains the Node.js/Express server code to proxy Google Cloud API calls.
-
-## Backend Environment Variables
-
-The `backend/.env.local` file is automatically generated when you download this application.
-It contains essential Google Cloud environment variables pre-configured based on your project settings at the time of download.
-
-The variables set in `backend/.env.local` are:
-*   `API_BACKEND_PORT`: The port the backend API server listens on (e.g., `5000`).
-*   `API_PAYLOAD_MAX_SIZE`: The maximum size of the request payload accepted by the backend server (e.g., `5mb`).
-*   `GOOGLE_CLOUD_LOCATION`: The Google Cloud region associated with your project.
-*   `GOOGLE_CLOUD_PROJECT`: Your Google Cloud Project ID.
-
-**Note:** These variables are automatically populated during the download process.
-You can modify the values in `backend/.env.local` if you need to change them.
-
-## Installation and Running the App
-
-To install dependencies and run your Google Cloud Vertex AI Studio App locally, execute the following command:
-
+### 2. Manual Development
 ```bash
-npm install && npm run dev
+npm install
+npm run dev
+```
+
+### 3. Build & Package Windows Installer
+Run the automated packaging script in PowerShell:
+```powershell
+.\package-installer.ps1
+```
+This generates:
+- Standalone Windows Setup Wizard: `dist-installer/Gemini-Co-Work-Setup-v1.5.0.exe`
+- Portable Distribution Archive: `dist-installer/Gemini-Co-Work-v1.5.0-Windows-x64.zip`
+
+## ⚙️ Configuration & Environment
+- Environment settings are stored locally in `.env.local` (never committed to git).
+- Cloud sync and preferences can be managed directly in the Windows 11 Fluent Settings Hub inside the app.

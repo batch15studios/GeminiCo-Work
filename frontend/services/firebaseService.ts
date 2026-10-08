@@ -52,12 +52,36 @@ export const initAuthSession = (onUserChange: (user: User | null) => void) => {
   });
 };
 
+export const getStoredGoogleToken = (): string | null => {
+  return localStorage.getItem('google_workspace_access_token');
+};
+
+export const setStoredGoogleToken = (token: string) => {
+  localStorage.setItem('google_workspace_access_token', token);
+};
+
+export const removeStoredGoogleToken = () => {
+  localStorage.removeItem('google_workspace_access_token');
+};
+
 /**
- * Sign in with Google Account (uses Google AI / Cloud identity)
+ * Sign in with Google Account with Google Workspace Scopes
  */
-export const loginWithGoogle = async () => {
+export const loginWithGoogle = async (includeWorkspaceScopes = true) => {
   const provider = new GoogleAuthProvider();
-  return await signInWithPopup(auth, provider);
+  if (includeWorkspaceScopes) {
+    provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+    provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+    provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+    provider.addScope('https://www.googleapis.com/auth/documents.readonly');
+  }
+  const result = await signInWithPopup(auth, provider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  const token = credential?.accessToken;
+  if (token) {
+    setStoredGoogleToken(token);
+  }
+  return { user: result.user, accessToken: token };
 };
 
 /**

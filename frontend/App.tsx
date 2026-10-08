@@ -919,6 +919,7 @@ export default function App() {
         onUpdateMcpServers={setMcpServers}
         workspaceFiles={workspaceFiles}
         googleIntegrations={googleIntegrations}
+        onUpdateGoogleIntegrations={setGoogleIntegrations}
         onToggleGoogleIntegration={handleToggleGoogleIntegration}
         onToggleAllGoogleIntegrations={handleToggleAllGoogleIntegrations}
         onToggleGoogleItem={handleToggleGoogleItem}

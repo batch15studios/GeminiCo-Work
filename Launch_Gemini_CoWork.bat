@@ -2,7 +2,7 @@
 title Gemini Co-Work - AI Workstation
 color 0B
 echo ========================================================
-echo               GEMINI CO-WORK v1.2.0
+echo               GEMINI CO-WORK v1.5.0
 echo             Desktop AI Pair Programmer
 echo ========================================================
 echo.
@@ -28,30 +28,38 @@ if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
     )
 )
 
-echo [2/4] Starting Gemini Co-Work backend & frontend services...
-start "Gemini Co-Work Server" /min cmd /c "npm run dev"
+set APP_PORT=5000
+if exist "frontend\dist\index.html" (
+    echo [2/4] Starting Gemini Co-Work production server on port 5000...
+    start "Gemini Co-Work Server" /min cmd /c "cd backend && node --env-file=.env.local server.js"
+) else (
+    set APP_PORT=5173
+    echo [2/4] Starting Gemini Co-Work development servers...
+    start "Gemini Co-Work Server" /min cmd /c "npm run dev"
+)
 
-echo [3/4] Waiting for frontend workstation to be ready...
-powershell -Command "for ($i=0; $i -lt 40; $i++) { try { $r = [System.Net.WebRequest]::Create('http://localhost:5173'); $res = $r.GetResponse(); if ($res.StatusCode -eq 200) { exit 0 } } catch {} Start-Sleep -Milliseconds 500 }; exit 0" >nul 2>nul
+echo [3/4] Waiting for workstation interface on port %APP_PORT%...
+powershell -Command "for ($i=0; $i -lt 40; $i++) { try { $r = [System.Net.WebRequest]::Create('http://localhost:' + $env:APP_PORT); $res = $r.GetResponse(); if ($res.StatusCode -eq 200) { exit 0 } } catch {} Start-Sleep -Milliseconds 250 }; exit 0" >nul 2>nul
 
+echo [4/4] Launching desktop workstation window...
 :: Launch in native desktop app window mode using Edge or Chrome if available
 if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" (
-    start "" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" --app=http://localhost:5173 --window-size=1400,900
+    start "" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" --app=http://localhost:%APP_PORT% --window-size=1400,900
     exit
 )
 if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" (
-    start "" "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" --app=http://localhost:5173 --window-size=1400,900
+    start "" "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" --app=http://localhost:%APP_PORT% --window-size=1400,900
     exit
 )
 if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" (
-    start "" "%ProgramFiles%\Google\Chrome\Application\chrome.exe" --app=http://localhost:5173 --window-size=1400,900
+    start "" "%ProgramFiles%\Google\Chrome\Application\chrome.exe" --app=http://localhost:%APP_PORT% --window-size=1400,900
     exit
 )
 if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" (
-    start "" "%LocalAppData%\Google\Chrome\Application\chrome.exe" --app=http://localhost:5173 --window-size=1400,900
+    start "" "%LocalAppData%\Google\Chrome\Application\chrome.exe" --app=http://localhost:%APP_PORT% --window-size=1400,900
     exit
 )
 
 :: Default browser fallback
-start http://localhost:5173
+start http://localhost:%APP_PORT%
 exit

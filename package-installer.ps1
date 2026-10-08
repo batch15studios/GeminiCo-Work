@@ -1,8 +1,8 @@
-# Gemini Co-Work v1.2.0 Packaging Automation Script
+# Gemini Co-Work v1.5.0 Packaging Automation Script
 # Builds the frontend, validates assets, and compiles or packages the installer
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "   Packaging Gemini Co-Work v1.2.0 for Windows (x64)      " -ForegroundColor White
+Write-Host "   Packaging Gemini Co-Work v1.5.0 for Windows (x64)      " -ForegroundColor White
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -38,7 +38,7 @@ if ((Test-Path $AppIcon) -and (Test-Path $InstallerIcon)) {
 
 # 3. Create portable release archive/folder
 Write-Host "[3/4] Preparing portable release bundle..." -ForegroundColor Yellow
-$PortableDir = Join-Path $DistDir "Gemini-Co-Work-v1.2.0-Portable"
+$PortableDir = Join-Path $DistDir "Gemini-Co-Work-v1.5.0-Portable"
 New-Item -ItemType Directory -Path $PortableDir -Force | Out-Null
 
 $FilesToCopy = @(
@@ -56,11 +56,11 @@ foreach ($f in $FilesToCopy) {
 
 Copy-Item -Path (Join-Path $RootDir "resources") -Destination $PortableDir -Recurse -Force
 Copy-Item -Path (Join-Path $RootDir "installer") -Destination $PortableDir -Recurse -Force
-Copy-Item -Path (Join-Path $RootDir "backend") -Destination $PortableDir -Recurse -Force -Exclude "node_modules"
+Copy-Item -Path (Join-Path $RootDir "backend") -Destination $PortableDir -Recurse -Force
 Copy-Item -Path (Join-Path $RootDir "frontend") -Destination $PortableDir -Recurse -Force -Exclude "node_modules"
 
 # Compress into portable zip for easy distribution
-$ZipPath = Join-Path $DistDir "Gemini-Co-Work-v1.2.0-Windows-x64.zip"
+$ZipPath = Join-Path $DistDir "Gemini-Co-Work-v1.5.0-Windows-x64.zip"
 Write-Host "  -> Compressing portable package to: $ZipPath" -ForegroundColor Cyan
 Compress-Archive -Path "$PortableDir\*" -DestinationPath $ZipPath -Force
 
@@ -68,6 +68,7 @@ Compress-Archive -Path "$PortableDir\*" -DestinationPath $ZipPath -Force
 Write-Host "[4/4] Checking Inno Setup compiler (ISCC.exe)..." -ForegroundColor Yellow
 $IsccPaths = @(
     "iscc.exe",
+    "$env:LocalAppData\Programs\Inno Setup 6\ISCC.exe",
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe"
 )
@@ -88,14 +89,14 @@ if ($IsccFound) {
     Write-Host "  -> Compiling standalone executable setup wizard..." -ForegroundColor Cyan
     & $IsccFound (Join-Path $RootDir "installer\gemini-co-work-setup.iss")
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "  -> Successfully generated installer: dist-installer\Gemini-Co-Work-Setup-v1.2.0.exe" -ForegroundColor Green
+        Write-Host "  -> Successfully generated installer: dist-installer\Gemini-Co-Work-Setup-v1.5.0.exe" -ForegroundColor Green
     } else {
         Write-Warning "Inno Setup compilation returned non-zero code."
     }
 } else {
     Write-Host "  -> Inno Setup compiler not found in PATH or Program Files." -ForegroundColor DarkYellow
     Write-Host "  -> Portable distribution bundle and one-click native installer created in: dist-installer\" -ForegroundColor Green
-    Write-Host "  -> (To generate a standalone setup .exe, install Inno Setup via 'winget install JR.InnoSetup' and re-run this script)" -ForegroundColor Gray
+    Write-Host "  -> (To generate a standalone setup .exe, install Inno Setup via 'winget install JRSoftware.InnoSetup' and re-run this script)" -ForegroundColor Gray
 }
 
 Write-Host ""
