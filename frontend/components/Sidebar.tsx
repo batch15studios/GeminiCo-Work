@@ -19,7 +19,8 @@ import {
   ExternalLink, 
   Settings as SettingsIcon,
   RefreshCw,
-  HardDrive
+  HardDrive,
+  Search
 } from 'lucide-react';
 import { ChatSession, Gem, WorkspaceFile } from '../types';
 import { User } from 'firebase/auth';
@@ -35,6 +36,7 @@ interface SidebarProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   onOpenSettings: () => void;
+  onOpenCommandPalette?: () => void;
   workspaceFiles: WorkspaceFile[];
   onToggleFileSelection: (id: string) => void;
   onSelectAllFiles: (select: boolean) => void;
@@ -53,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   setIsOpen,
   onOpenSettings,
+  onOpenCommandPalette,
   workspaceFiles,
   onToggleFileSelection,
   onSelectAllFiles,
@@ -219,6 +222,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             )}
           </button>
+          {onOpenCommandPalette && (
+            <button
+              onClick={onOpenCommandPalette}
+              title="Search Workspace & Commands (Ctrl+K)"
+              className="p-2 text-[#a0a0a0] hover:text-white hover:bg-[#2c2c2c] rounded-[4px] transition"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={onNewChat}
             title="New Chat (Ctrl+N)"
@@ -294,13 +306,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onNewChat}
-          title="New Conversation"
-          className="p-1.5 bg-[#282828] hover:bg-[#333333] active:bg-[#202020] text-white rounded-[4px] border border-[#383838] transition"
-        >
-          <Plus className="w-3.5 h-3.5 text-[#60cdff]" />
-        </button>
+        <div className="flex items-center space-x-1">
+          {onOpenCommandPalette && (
+            <button
+              onClick={onOpenCommandPalette}
+              title="Search Workspace & Commands (Ctrl+K)"
+              className="p-1.5 text-[#a0a0a0] hover:text-white hover:bg-[#2a2a2a] rounded-[4px] border border-transparent hover:border-[#383838] transition"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            onClick={onNewChat}
+            title="New Conversation (Ctrl+N)"
+            className="p-1.5 bg-[#282828] hover:bg-[#333333] active:bg-[#202020] text-white rounded-[4px] border border-[#383838] transition"
+          >
+            <Plus className="w-3.5 h-3.5 text-[#60cdff]" />
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: FILE EXPLORER TREE VIEW */}

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TitleBar } from './components/TitleBar';
 import { Sidebar } from './components/Sidebar';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
@@ -648,17 +647,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#202020] text-[#f3f3f3] overflow-hidden font-sans border border-[#333333]">
-      {/* Native Windows 11 TitleBar without top-bar settings buttons */}
-      <TitleBar
-        outputMode={activeSession.defaultOutputMode || 'canvas'}
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        isCanvasOpen={isCanvasOpen}
-        onToggleCanvas={() => setIsCanvasOpen(!isCanvasOpen)}
-        activeArtifact={activeArtifact}
-        onOpenVoice={() => setVoiceModalOpen(true)}
-      />
-
+    <div className="flex flex-col h-screen w-screen bg-[#181818] text-[#f3f3f3] overflow-hidden font-sans">
       <div className="flex-1 flex overflow-hidden relative bg-[#181818]">
         {/* Navigation Pane with dedicated Bottom-Left Settings Spot */}
         <Sidebar
@@ -671,6 +660,7 @@ export default function App() {
           isOpen={sidebarOpen}
           setIsOpen={setSidebarOpen}
           onOpenSettings={() => openSettingsOnTab('google')}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
           workspaceFiles={workspaceFiles}
           onToggleFileSelection={handleToggleFileSelection}
           onSelectAllFiles={handleSelectAllFiles}
@@ -681,6 +671,32 @@ export default function App() {
 
         {/* Central Workstation Stage */}
         <main className="flex-1 flex flex-col h-full bg-[#181818] relative overflow-hidden transition-all duration-150">
+          {/* Floating Canvas Toggle when Artifact exists or Canvas Mode active and Canvas is closed */}
+          {(activeArtifact || activeSession.defaultOutputMode === 'canvas') && !isCanvasOpen && (
+            <div className="absolute top-3 right-4 z-20">
+              <button
+                onClick={() => {
+                  if (!activeArtifact) {
+                    handleOpenFileInCanvas({
+                      id: 'draft-' + Date.now(),
+                      name: 'workspace_draft.ts',
+                      path: 'workspace_draft.ts',
+                      extension: 'ts',
+                      size: 0,
+                      content: '// Gemini Co-Work Interactive Workspace\n// Type code or notes here...\n',
+                      isSelected: true
+                    });
+                  }
+                  setIsCanvasOpen(true);
+                }}
+                title="Open Canvas Workspace (Ctrl+E)"
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-[#202020]/90 hover:bg-[#282828] border border-[#383838] hover:border-[#60cdff]/60 rounded-[6px] text-xs text-[#60cdff] shadow-md transition backdrop-blur"
+              >
+                <LayoutTemplate className="w-3.5 h-3.5 text-[#60cdff]" />
+                <span className="font-medium">{activeArtifact ? `Canvas: ${activeArtifact.title}` : 'Open Canvas'}</span>
+              </button>
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             {activeSession.messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto space-y-4">
