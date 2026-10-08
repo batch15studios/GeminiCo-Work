@@ -32,7 +32,8 @@ import {
   DEFAULT_GOOGLE_WORKSPACE_INTEGRATIONS 
 } from './constants';
 import { generateGeminiResponse, setActiveApiKey, getProviderModelList, resolveModelForProvider } from './services/geminiService';
-import { initAuthSession, syncUserDataToCloud } from './services/firebaseService';
+import { initAuthSession, syncUserDataToCloud, getStoredGoogleToken, getStoredUser, setStoredUser } from './services/firebaseService';
+import { fetchLiveGmailMessages, fetchLiveGoogleDriveFiles, fetchLiveCalendarEvents } from './services/googleWorkspaceService';
 import { fetchWorkspaceFiles, readWorkspaceFile } from './services/filesystemService';
 import { User } from 'firebase/auth';
 import { ArrowRight, LayoutTemplate, BookOpen, Headphones, Microscope, FileCode2 } from 'lucide-react';
@@ -63,7 +64,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | any | null>(() => getStoredUser());
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
@@ -489,6 +490,63 @@ export default function App() {
         });
       }
     });
+
+    // Smart natural language intent detection for Google Workspace
+    const isEmailQuery = /\b(email|emails|gmail|inbox|messages|mail)\b/i.test(text);
+    const isDriveDocQuery = /\b(drive|google drive|docs?|documents?|sheets?|spreadsheets?|slides?)\b/i.test(text);
+    const isCalendarQuery = /\b(calendar|schedule|events?|meetings?|appointments?)\b/i.test(text);
+    const isGeneralWorkspaceQuery = /\b(google workspace|workspace files|workspace items)\b/i.test(text);
+
+    // Auto-include matching connected items from integrations even if not individually ticked
+    if (isEmailQuery || isDriveDocQuery || isCalendarQuery || isGeneralWorkspaceQuery) {
+      googleIntegrations.forEach(app => {
+        if (app.isConnected) {
+          const matches =
+            (isEmailQuery && app.appType === 'gmail') ||
+            (isDriveDocQuery && (app.appType === 'drive' || app.appType === 'docs' || app.appType === 'sheets' || app.appType === 'slides')) ||
+            (isCalendarQuery && app.appType === 'calendar') ||
+            isGeneralWorkspaceQuery;
+
+          if (matches) {
+            app.items.forEach(item => {
+              if (!activeGoogleItems.some(existing => existing.id === item.id)) {
+                activeGoogleItems.push(item);
+              }
+            });
+          }
+        }
+      });
+    }
+
+    // If matching items are still empty, but a live Google OAuth token is stored, attempt on-the-fly fetch!
+    const token = getStoredGoogleToken();
+    if (token) {
+      try {
+        if (isEmailQuery && !activeGoogleItems.some(i => i.appType === 'gmail')) {
+          const liveEmails = await fetchLiveGmailMessages(token);
+          if (liveEmails.length > 0) {
+            activeGoogleItems.push(...liveEmails);
+            setGoogleIntegrations(prev => prev.map(app => app.appType === 'gmail' ? { ...app, isConnected: true, items: liveEmails } : app));
+          }
+        }
+        if (isDriveDocQuery && !activeGoogleItems.some(i => i.appType === 'drive' || i.appType === 'docs')) {
+          const liveDrive = await fetchLiveGoogleDriveFiles(token);
+          if (liveDrive.length > 0) {
+            activeGoogleItems.push(...liveDrive);
+            setGoogleIntegrations(prev => prev.map(app => (app.appType === 'drive' || app.appType === 'docs') ? { ...app, isConnected: true, items: liveDrive } : app));
+          }
+        }
+        if (isCalendarQuery && !activeGoogleItems.some(i => i.appType === 'calendar')) {
+          const liveEvents = await fetchLiveCalendarEvents(token);
+          if (liveEvents.length > 0) {
+            activeGoogleItems.push(...liveEvents);
+            setGoogleIntegrations(prev => prev.map(app => app.appType === 'calendar' ? { ...app, isConnected: true, items: liveEvents } : app));
+          }
+        }
+      } catch (liveFetchErr) {
+        console.warn('[Workspace Live Fetch notice]:', liveFetchErr);
+      }
+    }
 
     const userMessage: Message = {
       id: 'msg-' + Date.now(),
@@ -919,6 +977,7 @@ export default function App() {
         onClose={() => setSettingsModalOpen(false)}
         initialTab={settingsModalTab}
         currentUser={currentUser}
+        onUserChange={setCurrentUser}
         settings={settings}
         onUpdateSettings={handleUpdateSettings}
         sessions={sessions}

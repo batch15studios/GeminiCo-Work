@@ -199,3 +199,28 @@ export const fetchLiveCalendarEvents = async (customToken?: string): Promise<Goo
     };
   });
 };
+
+export interface SystemGoogleAccount {
+  available: boolean;
+  email?: string;
+  name?: string;
+  picture?: string;
+  token?: string;
+  message?: string;
+}
+
+/**
+ * Checks if the host computer has an active system Google account (via gcloud / ADC)
+ */
+export const fetchSystemGoogleAccount = async (): Promise<SystemGoogleAccount | null> => {
+  try {
+    const res = await fetch('/api/auth/google/system');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('System Google Account check notice:', err);
+  }
+  return null;
+};
+

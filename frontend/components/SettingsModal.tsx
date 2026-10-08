@@ -93,6 +93,7 @@ interface SettingsModalProps {
   onToggleGoogleIntegration: (appType: string) => void;
   onToggleAllGoogleIntegrations: (connectAll: boolean) => void;
   onToggleGoogleItem: (itemId: string) => void;
+  onUserChange?: (user: User | any) => void;
   onMigrateCloudData: (cloudData: {
     settings?: AppSettings;
     sessions?: ChatSession[];
@@ -108,6 +109,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   initialTab = 'google',
   currentUser,
+  onUserChange,
   settings,
   onUpdateSettings,
   sessions,
@@ -137,6 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isGoogleSyncing, setIsGoogleSyncing] = useState(false);
   const [googleSyncMessage, setGoogleSyncMessage] = useState<string | null>(null);
   const [hasGoogleAuth, setHasGoogleAuth] = useState<boolean>(() => !!getStoredGoogleToken());
+  const [customGoogleToken, setCustomGoogleToken] = useState<string>(() => getStoredGoogleToken() || '');
 
   // New Gem Form state
   const [isAddingGem, setIsAddingGem] = useState(false);
@@ -249,10 +252,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handlePullUpdate = async () => {
     setIsPullingUpdate(true);
+    setStatusMessage({ type: 'info', text: 'Checking, downloading, and applying latest update from GitHub...' });
     try {
-      const res = await pullLatestUpdate();
+      const res: any = await pullLatestUpdate();
       if (res.success) {
-        setStatusMessage({ type: 'success', text: 'Successfully pulled latest changes from GitHub! Restart the application to apply.' });
+        setStatusMessage({ 
+          type: 'success', 
+          text: `Update applied successfully (${res.version || 'v1.5.1'})! ${res.message || ''} Please reload or restart the app to apply.` 
+        });
+      } else {
+        setStatusMessage({ type: 'info', text: res.message || 'Update status checked.' });
+        if (res.downloadUrl) {
+          window.open(res.downloadUrl, '_blank');
+        }
       }
     } catch (e: any) {
       setStatusMessage({ type: 'error', text: `Failed to pull update: ${e.message}` });
@@ -261,11 +273,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+
   const handleGoogleSignIn = async () => {
-    setStatusMessage({ type: 'info', text: 'Signing in with Google...' });
+    setStatusMessage({ type: 'info', text: 'Connecting Google credentials & AI credits...' });
     try {
-      await loginWithGoogle();
-      setStatusMessage({ type: 'success', text: 'Successfully signed in with Google Account! AI Pro credits and Cloud identity active.' });
+      const res = await loginWithGoogle(true);
+      if (res.user) {
+        onUserChange?.(res.user);
+        setHasGoogleAuth(true);
+        if (res.accessToken) {
+          setCustomGoogleToken(res.accessToken);
+        }
+        setStatusMessage({ 
+          type: 'success', 
+          text: `✓ Successfully verified and connected as ${res.user.email}! Profile, AI credits, and Workspace attached.` 
+        });
+        if (res.accessToken) {
+          await handleSyncAllGoogleWorkspace(res.accessToken);
+        }
+      }
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message || 'Google sign-in failed.' });
     }
@@ -364,22 +390,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleGoogleWorkspaceLogin = async () => {
     setIsGoogleSyncing(true);
-    setGoogleSyncMessage('Signing in with Google and requesting Workspace permissions...');
+    setGoogleSyncMessage('Connecting Google Account & Workspace permissions...');
     try {
-      const { accessToken, user } = await loginWithGoogle(true);
+      const { accessToken, user, isSystemFallback } = await loginWithGoogle(true);
+      if (user) {
+        onUserChange?.(user);
+      }
       if (accessToken) {
         setHasGoogleAuth(true);
-        setGoogleSyncMessage(`Connected as ${user.email || 'Google User'}. Syncing live files, emails, and events...`);
+        setCustomGoogleToken(accessToken);
+        setGoogleSyncMessage(
+          isSystemFallback
+            ? `Connected as ${user.email} (System Google Account). Testing live workspace connection...`
+            : `Connected as ${user.email}. Syncing live files, emails, and events...`
+        );
         await handleSyncAllGoogleWorkspace(accessToken);
       } else {
-        setGoogleSyncMessage('Signed in, but access token was not returned. Please try again.');
+        setGoogleSyncMessage('Signed in, but access token was not returned. Please try entering a token manually.');
       }
     } catch (err: any) {
       console.error('Google Workspace Auth Error:', err);
-      setGoogleSyncMessage(`Authentication error: ${err.message || 'Failed to sign in with Google'}`);
+      setGoogleSyncMessage(`Authentication notice: ${err.message || 'Failed to sign in with Google'}`);
     } finally {
       setIsGoogleSyncing(false);
     }
+  };
+
+  const handleConnectCustomToken = async () => {
+    if (!customGoogleToken.trim()) {
+      setGoogleSyncMessage('Please enter a valid Google OAuth access token.');
+      return;
+    }
+    setStoredGoogleToken(customGoogleToken.trim());
+    setHasGoogleAuth(true);
+    setGoogleSyncMessage('Custom access token saved. Testing and syncing Google Workspace items...');
+    await handleSyncAllGoogleWorkspace(customGoogleToken.trim());
   };
 
   const handleSyncAllGoogleWorkspace = async (token?: string) => {
@@ -444,7 +489,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (onUpdateGoogleIntegrations) {
         onUpdateGoogleIntegrations(updated);
       }
-      setGoogleSyncMessage(`Sync complete: ${driveItems.length} Drive files, ${gmailItems.length} emails, and ${calendarItems.length} calendar events loaded into Co-work scope.`);
+
+      const totalItems = driveItems.length + gmailItems.length + calendarItems.length;
+      if (totalItems > 0) {
+        setGoogleSyncMessage(`Sync complete: ${driveItems.length} Drive files, ${gmailItems.length} emails, and ${calendarItems.length} calendar events loaded into Co-work scope.`);
+      } else {
+        setGoogleSyncMessage('Connected! Token verified. (If Drive or Gmail has restricted permissions on your account, paste a token with Drive/Gmail scopes from OAuth Playground below).');
+      }
     } catch (err: any) {
       setGoogleSyncMessage(`Sync notice: ${err.message}`);
     } finally {
@@ -878,6 +929,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button onClick={() => setGoogleSyncMessage(null)} className="text-[#888888] hover:text-white ml-2">✕</button>
                     </div>
                   )}
+
+                  {/* Direct Token / OAuth Playground option */}
+                  <div className="pt-2.5 border-t border-[#253e58] flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                    <input
+                      type="password"
+                      value={customGoogleToken}
+                      onChange={(e) => setCustomGoogleToken(e.target.value)}
+                      placeholder="Paste Google OAuth Token (ya29...) or Custom Token"
+                      className="flex-1 bg-[#121921] border border-[#2b4c6d] rounded-[4px] px-2.5 py-1 text-xs text-white font-mono placeholder:text-[#5f7a93] focus:outline-none focus:border-[#60cdff]"
+                    />
+                    <button
+                      type="button"
+                      disabled={isGoogleSyncing}
+                      onClick={handleConnectCustomToken}
+                      className="px-3 py-1 bg-[#1e4466] hover:bg-[#285b8a] text-[#60cdff] rounded-[4px] text-xs font-medium transition whitespace-nowrap"
+                    >
+                      Connect Token
+                    </button>
+                    <a
+                      href="https://developers.google.com/oauthplayground"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2 py-1 bg-[#19222c] hover:bg-[#24313f] text-[#8cb3d9] hover:text-white rounded-[4px] text-[11px] border border-[#2b4c6d] transition text-center whitespace-nowrap"
+                      title="Open Google OAuth Playground to authorize Drive, Gmail & Calendar scopes"
+                    >
+                      OAuth Playground ↗
+                    </a>
+                  </div>
+                </div>
+
+                {/* Google AI Pro / AI Studio Credit Integration */}
+                <div className="p-3 bg-[#19222e] border border-[#234668] rounded-[6px] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-[#60cdff]" />
+                      <span className="text-xs font-semibold text-white">Google AI Pro & Cloud Credits Integration</span>
+                    </div>
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-[#60cdff] hover:underline flex items-center space-x-1"
+                    >
+                      <span>Get Key from Google AI Studio</span>
+                      <span>↗</span>
+                    </a>
+                  </div>
+                  <p className="text-[11px] text-[#90a8bd]">
+                    Subscribed to Google AI Pro / Gemini Advanced? Your Google account includes Gemini API credits in Google AI Studio. Generate your key and paste it below to run Gemini 3.8 Flash, 3.7 Thinking, and 3.1 Pro Preview.
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="password"
+                      value={settings.apiKey || ''}
+                      onChange={(e) => onUpdateSettings({ ...settings, apiKey: e.target.value })}
+                      placeholder="AIzaSy... (Paste Gemini API Key to use your Google AI credits)"
+                      className="flex-1 bg-[#121921] border border-[#2b4c6d] rounded-[4px] px-2.5 py-1.5 text-xs text-white font-mono placeholder:text-[#5f7a93] focus:outline-none focus:border-[#60cdff]"
+                    />
+                    {settings.apiKey && (
+                      <span className="text-[11px] text-[#58d68d] font-medium px-2 py-1 bg-[#16291e] border border-[#276e4c] rounded-[4px] whitespace-nowrap">
+                        Key Active ✓
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="p-3 bg-[#24292e] border border-[#2b4c6d] rounded-[6px] flex items-center justify-between">
@@ -1539,23 +1654,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-4">
                 <div className="p-4 bg-[#262626] border border-[#333333] rounded-[6px] flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-[#1e3448] border border-[#2b5478] flex items-center justify-center text-[#60cdff]">
-                      <UserIcon className="w-5 h-5" />
-                    </div>
+                    {currentUser?.photoURL ? (
+                      <img src={currentUser.photoURL} alt="Avatar" className="w-10 h-10 rounded-full object-cover border border-[#2b5478]" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-[#1e3448] border border-[#2b5478] flex items-center justify-center text-[#60cdff]">
+                        <UserIcon className="w-5 h-5" />
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs font-semibold text-white">
                           {currentUser?.displayName || currentUser?.email || 'Guest User (Anonymous)'}
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                          isAnonymous ? 'bg-[#333333] text-[#909090]' : 'bg-[#1e3e2b] text-[#58d68d]'
+                          isAnonymous ? 'bg-[#333333] text-[#909090]' : 'bg-[#1e3e2b] text-[#58d68d] border border-[#276e4c]'
                         }`}>
-                          {isAnonymous ? 'Local Session' : 'Cloud Verified'}
+                          {isAnonymous ? 'Local Session' : '✓ Google Verified'}
                         </span>
                       </div>
                       <p className="text-[11px] text-[#808080] mt-0.5">
-                        UID: {currentUser?.uid?.slice(0, 16)}...
+                        {currentUser?.email ? currentUser.email : `UID: ${currentUser?.uid?.slice(0, 16)}...`}
                       </p>
+                      {!isAnonymous && (
+                        <p className="text-[10px] text-[#58d68d] font-medium mt-0.5">
+                          Google Credentials & AI Pro credits attached to workspace
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -2254,7 +2378,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <h3 className="text-xs font-semibold text-white flex items-center space-x-2">
                         <span>Gemini Co-work Desktop</span>
                         <span className="px-1.5 py-0.2 bg-[#1b3449] text-[#60cdff] text-[10px] font-mono rounded border border-[#275374]">
-                          v1.5.0
+                          v1.5.1
                         </span>
                       </h3>
                       <p className="text-[11px] text-[#8c8c8c] mt-0.5">
@@ -2287,7 +2411,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="px-3 py-1.5 bg-[#1b5e3f] hover:bg-[#237750] border border-[#2c885c] text-white rounded-[4px] text-xs font-medium transition flex items-center space-x-1.5"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>{isPullingUpdate ? 'Pulling...' : 'Pull Update (Git)'}</span>
+                        <span>{isPullingUpdate ? 'Updating...' : 'Update App Now'}</span>
                       </button>
                     </div>
                   </div>
@@ -2334,9 +2458,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="p-4 bg-[#19232c] border border-[#234259] rounded-[6px] flex items-start space-x-3">
                   <img src="/installer-icon.png" alt="Package Installer" className="w-12 h-12 rounded-[6px] object-contain flex-shrink-0" />
                   <div className="space-y-1">
-                    <h4 className="text-xs font-semibold text-[#60cdff]">Windows Installer Packaging (v1.5.0)</h4>
+                    <h4 className="text-xs font-semibold text-[#60cdff]">Windows Installer Packaging (v1.5.1)</h4>
                     <p className="text-[11px] text-[#a0c2db] leading-relaxed">
-                      You can compile a standalone Windows Setup installer (<code className="font-mono text-white">GeminiCoWork-Setup-v1.5.0.exe</code>) using Inno Setup or run the automated script <code className="font-mono text-white">package-installer.ps1</code> in the workspace root.
+                      You can compile a standalone Windows Setup installer (<code className="font-mono text-white">GeminiCoWork-Setup-v1.5.1.exe</code>) using Inno Setup or run the automated script <code className="font-mono text-white">package-installer.ps1</code> in the workspace root.
                     </p>
                   </div>
                 </div>

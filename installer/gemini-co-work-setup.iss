@@ -1,8 +1,8 @@
-; Inno Setup Script for Gemini Co-Work v1.5.0
+; Inno Setup Script for Gemini Co-Work v1.5.1
 ; Designed for Windows 10/11 x64
 
 #define MyAppName "Gemini Co-Work"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.5.1"
 #define MyAppPublisher "Batch15 Studios"
 #define MyAppURL "https://github.com/batch15studios/GeminiCo-Work"
 #define MyAppExeName "Launch_Gemini_CoWork.bat"

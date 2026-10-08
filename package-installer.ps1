@@ -1,8 +1,8 @@
-# Gemini Co-Work v1.5.0 Packaging Automation Script
+# Gemini Co-Work v1.5.1 Packaging Automation Script
 # Builds the frontend, validates assets, and compiles or packages the installer
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "   Packaging Gemini Co-Work v1.5.0 for Windows (x64)      " -ForegroundColor White
+Write-Host "   Packaging Gemini Co-Work v1.5.1 for Windows (x64)      " -ForegroundColor White
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host ""
 

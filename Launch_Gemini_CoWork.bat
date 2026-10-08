@@ -2,7 +2,7 @@
 title Gemini Co-Work - AI Workstation
 color 0B
 echo ========================================================
-echo               GEMINI CO-WORK v1.5.0
+echo               GEMINI CO-WORK v1.5.1
 echo             Desktop AI Pair Programmer
 echo ========================================================
 echo.

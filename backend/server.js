@@ -18,6 +18,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { mcpManager } from './mcpManager.js';
 
+import os from 'os';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -591,6 +593,53 @@ app.get('/api/local/status', async (req, res) => {
   return res.json({ online: false, models: [], provider: 'ollama' });
 });
 
+// GET /api/auth/google/system - Retrieve active local Google account from system gcloud or ADC
+app.get('/api/auth/google/system', async (req, res) => {
+  try {
+    let email = null;
+    let token = null;
+
+    try {
+      const { stdout: emailOut } = await execAsync('gcloud config get-value account');
+      if (emailOut && emailOut.trim() && !emailOut.includes('(unset)')) {
+        email = emailOut.trim();
+      }
+    } catch (_) {}
+
+    try {
+      const { stdout: tokenOut } = await execAsync('gcloud auth print-access-token');
+      if (tokenOut && tokenOut.trim()) {
+        token = tokenOut.trim();
+      }
+    } catch (_) {}
+
+    if (token) {
+      let userInfo = {};
+      try {
+        const uResp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (uResp.ok) {
+          userInfo = await uResp.json();
+          if (userInfo.email) email = userInfo.email;
+        }
+      } catch (_) {}
+
+      return res.json({
+        available: true,
+        email: email || userInfo.email || 'google-user@gmail.com',
+        name: userInfo.name || (email ? email.split('@')[0] : 'Google User'),
+        picture: userInfo.picture || null,
+        token: token
+      });
+    }
+
+    return res.json({ available: false, message: 'No active local Google token found in system gcloud.' });
+  } catch (err) {
+    return res.status(500).json({ available: false, error: err.message });
+  }
+});
+
 // POST /api/local/start - Attempt to launch Ollama background daemon
 app.post('/api/local/start', async (req, res) => {
   try {
@@ -735,7 +784,9 @@ app.post('/api/local/pull', async (req, res) => {
 // ==========================================
 // 1. FILE SYSTEM APIS (Real Local Disk Sync)
 // ==========================================
-const WORKSPACE_ROOT = path.resolve(process.cwd(), '..');
+const WORKSPACE_ROOT = fsSync.existsSync(path.resolve(__dirname, '../package.json')) 
+  ? path.resolve(__dirname, '..') 
+  : (fsSync.existsSync(path.resolve(process.cwd(), 'package.json')) ? process.cwd() : path.resolve(process.cwd(), '..'));
 
 const resolveSafePath = (requestedPath) => {
   if (!requestedPath) return WORKSPACE_ROOT;
@@ -903,10 +954,10 @@ app.get('/api/mcp/tools', (req, res) => {
 });
 
 // ==========================================
-// 3. GITHUB UPDATES & VERSION STATUS (v1.5.0)
+// 3. GITHUB UPDATES & VERSION STATUS (v1.5.1)
 // ==========================================
 app.get('/api/updates/check', async (req, res) => {
-  const currentVersion = '1.5.0';
+  const currentVersion = '1.5.1';
   const repoOwner = 'batch15studios';
   const repoName = 'GeminiCo-Work';
 
@@ -964,15 +1015,116 @@ app.get('/api/updates/check', async (req, res) => {
   }
 });
 
+async function downloadAndApplyGithubArchive(targetDir) {
+  const archiveUrl = 'https://github.com/batch15studios/GeminiCo-Work/archive/refs/heads/main.zip';
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gemini-update-'));
+  const zipPath = path.join(tempDir, 'update.zip');
+  
+  console.log(`[Updates] Downloading release archive from ${archiveUrl}...`);
+  const response = await fetch(archiveUrl, {
+    headers: { 'User-Agent': 'Gemini-Co-Work-Desktop-App' }
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch update from GitHub: ${response.status} ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  await fs.writeFile(zipPath, Buffer.from(arrayBuffer));
+  console.log(`[Updates] Archive downloaded (${arrayBuffer.byteLength} bytes). Extracting with native tar...`);
+
+  const extractDir = path.join(tempDir, 'extracted');
+  await fs.mkdir(extractDir, { recursive: true });
+  await execAsync(`tar -xf "${zipPath}" -C "${extractDir}"`);
+
+  const entries = await fs.readdir(extractDir);
+  const rootExtracted = (entries.length === 1 && (await fs.stat(path.join(extractDir, entries[0]))).isDirectory())
+    ? path.join(extractDir, entries[0])
+    : extractDir;
+
+  console.log(`[Updates] Applying files from ${rootExtracted} to ${targetDir}...`);
+
+  async function copyDir(src, dest) {
+    await fs.mkdir(dest, { recursive: true });
+    const items = await fs.readdir(src, { withFileTypes: true });
+    for (const item of items) {
+      if (item.name === 'node_modules' || item.name === '.git' || item.name === '.env' || item.name === '.env.local') {
+        continue;
+      }
+      const srcItem = path.join(src, item.name);
+      const destItem = path.join(dest, item.name);
+      if (item.isDirectory()) {
+        await copyDir(srcItem, destItem);
+      } else {
+        await fs.copyFile(srcItem, destItem);
+      }
+    }
+  }
+
+  await copyDir(rootExtracted, targetDir);
+
+  try {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  } catch (cleanErr) {
+    console.warn('[Updates] Temp cleanup warning:', cleanErr.message);
+  }
+
+  let updatedVersion = '1.5.1';
+  try {
+    const pkg = JSON.parse(await fs.readFile(path.join(targetDir, 'package.json'), 'utf8'));
+    if (pkg.version) updatedVersion = pkg.version;
+  } catch (_) {}
+
+  return { updatedVersion };
+}
+
 app.post('/api/updates/pull', async (req, res) => {
   try {
-    const { stdout, stderr } = await execAsync('git pull origin main', { cwd: WORKSPACE_ROOT });
-    res.json({ success: true, stdout, stderr });
+    const gitDir = path.join(WORKSPACE_ROOT, '.git');
+    const isGitRepo = fsSync.existsSync(gitDir);
+
+    if (isGitRepo) {
+      console.log('[Updates] Pulling latest changes from git origin main...');
+      try {
+        const { stdout: pullOut, stderr: pullErr } = await execAsync('git pull origin main', { cwd: WORKSPACE_ROOT });
+        
+        let buildNotice = '';
+        try {
+          console.log('[Updates] Checking frontend assets...');
+          const { stdout: buildOut } = await execAsync('npm run build --prefix frontend', { cwd: WORKSPACE_ROOT });
+          buildNotice = '\nFrontend build refreshed successfully.';
+        } catch (bErr) {
+          buildNotice = '\nPrebuilt frontend assets active.';
+        }
+
+        return res.json({ 
+          success: true, 
+          method: 'git',
+          stdout: `${pullOut}${buildNotice}`.trim(), 
+          stderr: pullErr,
+          version: '1.5.1',
+          message: 'Successfully pulled latest changes from GitHub repository.'
+        });
+      } catch (gitErr) {
+        console.warn('[Updates] Git pull encountered error, attempting direct archive update:', gitErr.message);
+      }
+    }
+
+    // Standalone desktop application or portable environment: download GitHub archive directly
+    console.log('[Updates] Performing direct GitHub archive update...');
+    const result = await downloadAndApplyGithubArchive(WORKSPACE_ROOT);
+    
+    return res.json({
+      success: true,
+      method: 'archive',
+      version: result.updatedVersion,
+      message: `Successfully updated to v${result.updatedVersion}! Files replaced in-place.`
+    });
   } catch (err) {
     console.error('[Updates] Pull error:', err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Serve Frontend Production Build if present (Unified Single-Port Serving)
 const frontendDistPath = path.resolve(__dirname, '../frontend/dist');

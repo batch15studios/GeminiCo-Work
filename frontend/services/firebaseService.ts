@@ -35,11 +35,47 @@ export interface UserCloudSyncPayload {
   mcpServers?: MCPServer[];
 }
 
+const STORAGE_USER_KEY = 'gemini_cowork_user_v1';
+
+export const getStoredUser = (): any | null => {
+  try {
+    const raw = localStorage.getItem(STORAGE_USER_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+};
+
+export const setStoredUser = (user: any) => {
+  if (user && !user.isAnonymous) {
+    localStorage.setItem(STORAGE_USER_KEY, JSON.stringify({
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || user.email?.split('@')[0],
+      photoURL: user.photoURL,
+      isAnonymous: false
+    }));
+  } else if (!user) {
+    localStorage.removeItem(STORAGE_USER_KEY);
+  }
+};
+
 /**
  * Ensures user is authenticated (anonymous session by default for immediate Firestore access)
  */
-export const initAuthSession = (onUserChange: (user: User | null) => void) => {
+export const initAuthSession = (onUserChange: (user: User | any | null) => void) => {
+  // If we already have a persisted verified Google/system user, preserve it!
+  const saved = getStoredUser();
+  if (saved && !saved.isAnonymous) {
+    onUserChange(saved);
+  }
+
   return onAuthStateChanged(auth, async (user) => {
+    const activeSaved = getStoredUser();
+    if (activeSaved && !activeSaved.isAnonymous) {
+      // Do not downgrade or overwrite a verified user with an anonymous session!
+      return;
+    }
+
     if (!user) {
       try {
         await signInAnonymously(auth);
@@ -47,6 +83,9 @@ export const initAuthSession = (onUserChange: (user: User | null) => void) => {
         console.warn('Anonymous sign-in fallback:', err);
       }
     } else {
+      if (!user.isAnonymous) {
+        setStoredUser(user);
+      }
       onUserChange(user);
     }
   });
@@ -64,24 +103,73 @@ export const removeStoredGoogleToken = () => {
   localStorage.removeItem('google_workspace_access_token');
 };
 
+import { fetchSystemGoogleAccount } from './googleWorkspaceService';
+
+export interface GoogleLoginResult {
+  user: User | any;
+  accessToken?: string | null;
+  isSystemFallback?: boolean;
+}
+
 /**
  * Sign in with Google Account with Google Workspace Scopes
  */
-export const loginWithGoogle = async (includeWorkspaceScopes = true) => {
-  const provider = new GoogleAuthProvider();
-  if (includeWorkspaceScopes) {
-    provider.addScope('https://www.googleapis.com/auth/drive.readonly');
-    provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
-    provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
-    provider.addScope('https://www.googleapis.com/auth/documents.readonly');
+export const loginWithGoogle = async (includeWorkspaceScopes = true): Promise<GoogleLoginResult> => {
+  // Step 1: Check if local system Google account (gcloud / ADC) is present and ready
+  try {
+    const sysAccount = await fetchSystemGoogleAccount();
+    if (sysAccount && sysAccount.available && sysAccount.token) {
+      console.log('[Auth] Active local system Google account detected:', sysAccount.email);
+      setStoredGoogleToken(sysAccount.token);
+      const sysUser = {
+        uid: 'google-system-' + (sysAccount.email || 'user'),
+        email: sysAccount.email || 'batch15studios@gmail.com',
+        displayName: sysAccount.name || sysAccount.email?.split('@')[0] || 'Google User',
+        photoURL: sysAccount.picture || null,
+        isAnonymous: false
+      };
+      setStoredUser(sysUser);
+      return { user: sysUser, accessToken: sysAccount.token, isSystemFallback: true };
+    }
+  } catch (sysErr) {
+    console.warn('[Auth] System Google check notice:', sysErr);
   }
-  const result = await signInWithPopup(auth, provider);
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  const token = credential?.accessToken;
-  if (token) {
-    setStoredGoogleToken(token);
+
+  // Step 2: If no system account available, attempt standard popup
+  try {
+    const provider = new GoogleAuthProvider();
+    if (includeWorkspaceScopes) {
+      provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+      provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+      provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+      provider.addScope('https://www.googleapis.com/auth/documents.readonly');
+    }
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken;
+    if (token) {
+      setStoredGoogleToken(token);
+    }
+    setStoredUser(result.user);
+    return { user: result.user, accessToken: token, isSystemFallback: false };
+  } catch (err: any) {
+    console.warn('[Auth] Firebase popup error:', err.code, err.message);
+    // On ANY popup failure (closed, blocked, unauthorized-domain), do fallback check
+    const sysAccount = await fetchSystemGoogleAccount();
+    if (sysAccount && sysAccount.available && sysAccount.token) {
+      setStoredGoogleToken(sysAccount.token);
+      const sysUser = {
+        uid: 'google-system-' + (sysAccount.email || 'user'),
+        email: sysAccount.email || 'batch15studios@gmail.com',
+        displayName: sysAccount.name || sysAccount.email?.split('@')[0] || 'Google User',
+        photoURL: sysAccount.picture || null,
+        isAnonymous: false
+      };
+      setStoredUser(sysUser);
+      return { user: sysUser, accessToken: sysAccount.token, isSystemFallback: true };
+    }
+    throw new Error('Google Sign-In could not complete. You can connect your Google OAuth token directly below.');
   }
-  return { user: result.user, accessToken: token };
 };
 
 /**

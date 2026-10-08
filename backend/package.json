@@ -2,7 +2,7 @@
   "name": "gemini-co-work-api-backend-server",
   "type": "module",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Node backend for proxying Google Cloud API requests",
   "main": "server.js",
   "scripts": {

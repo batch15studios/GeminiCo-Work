@@ -491,17 +491,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
-      {/* DEDICATED BOTTOM-LEFT SETTINGS SPOT */}
+      {/* DEDICATED BOTTOM-LEFT SETTINGS & ACCOUNT SPOT */}
       <div className="h-10 border-t border-[#2a2a2a] bg-[#191919] px-2 flex items-center justify-between text-xs">
         <button
           onClick={onOpenSettings}
-          title="Open Settings"
-          className="flex items-center space-x-2 px-2 py-1.5 w-full rounded-[4px] hover:bg-[#252525] text-[#cccccc] hover:text-white transition"
+          title={currentUser && !isAnonymous ? `Settings (${currentUser.email || currentUser.displayName})` : 'Open Settings'}
+          className="flex items-center space-x-2 px-2 py-1.5 w-full rounded-[4px] hover:bg-[#252525] text-[#cccccc] hover:text-white transition overflow-hidden"
         >
-          <SettingsIcon className="w-4 h-4 text-[#60cdff]" />
-          <span className="font-medium text-xs">Settings</span>
-          {!isAnonymous && (
-            <span className="w-1.5 h-1.5 rounded-full bg-[#58d68d] ml-auto" />
+          {currentUser && !isAnonymous ? (
+            <>
+              {currentUser.photoURL ? (
+                <img src={currentUser.photoURL} alt="Avatar" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-4 h-4 rounded-full bg-[#1b3449] border border-[#275374] flex items-center justify-center text-[9px] text-[#60cdff] font-bold flex-shrink-0">
+                  {(currentUser.displayName || currentUser.email || 'G')[0].toUpperCase()}
+                </div>
+              )}
+              <span className="font-medium text-xs text-[#e0e0e0] truncate flex-1 text-left" title={currentUser.email || ''}>
+                {currentUser.displayName || currentUser.email?.split('@')[0]}
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#58d68d] flex-shrink-0" title="Google Account Connected" />
+            </>
+          ) : (
+            <>
+              <SettingsIcon className="w-4 h-4 text-[#60cdff]" />
+              <span className="font-medium text-xs">Settings</span>
+            </>
           )}
         </button>
       </div>

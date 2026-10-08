@@ -277,9 +277,10 @@ export const generateLocalModelResponse = async (
   }
 
   // 3. System Instructions tailored for Mode & Gem Persona
-  let sysPrompt = 'You are an expert AI engineering and research assistant in Gemini Co-Work.';
+  const defaultWorkspaceDirective = "You are Gemini Co-work, an advanced AI desktop copilot (similar to Claude Co-work and GPT Desktop). You have deep integration with the user's local workspace files, tools, and Google Workspace (Gmail, Google Drive, Google Docs, Google Calendar). When the user asks to inspect emails, summarize documents, find files, or check calendar appointments, analyze the loaded Google Workspace items directly, cite their subject/file names and dates, extract relevant details, and provide actionable summaries.";
+  let sysPrompt = defaultWorkspaceDirective;
   if (systemInstruction) {
-    sysPrompt = systemInstruction;
+    sysPrompt = `${systemInstruction}\n\n${defaultWorkspaceDirective}`;
   } else if (outputMode === 'architect') {
     sysPrompt = 'You are a Senior Principal Software Architect in Gemini Co-Work. Provide robust system architectures, deep modular refactorings, and complete working implementations inside fenced code blocks (e.g. ```tsx or ```html).';
   } else if (outputMode === 'canvas') {
@@ -1010,10 +1011,14 @@ Include any brief commentary before the code.
     parts.push({ text: effectivePrompt });
 
     const config: any = {};
+    const defaultCopilotPrompt = "You are Gemini Co-work, an advanced multimodal AI desktop copilot (similar to Claude Co-work and GPT Desktop). You have deep integration with the user's local workspace files, tools, and Google Workspace (Gmail, Google Drive, Google Docs, Google Calendar). When the user asks to inspect emails, summarize documents, find files, or check calendar appointments, analyze the loaded Google Workspace items directly, cite their subject/file names and dates, extract relevant details, and provide actionable summaries.";
+
     if (outputMode === 'architect') {
       config.systemInstruction = 'You are a Senior Principal Software Architect. Write high-performance, modular, idiomatic TypeScript and React code, explain trade-offs clearly, and emit complete working files inside markdown code blocks.';
     } else if (systemInstruction) {
-      config.systemInstruction = systemInstruction;
+      config.systemInstruction = `${systemInstruction}\n\n${defaultCopilotPrompt}`;
+    } else {
+      config.systemInstruction = defaultCopilotPrompt;
     }
 
     if (enableGrounding) {
